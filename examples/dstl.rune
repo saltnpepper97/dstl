@@ -6,7 +6,7 @@ launcher:
     dmenu = false
 
     # Where the search bar appears (options: "top" or "bottom")
-    search_position = "bottom"
+    search_position = "top"
 
     # Startup mode (options: "single" or "dual")
     startup_mode = "single"
@@ -15,7 +15,10 @@ launcher:
     focus_search_on_switch = true
 
     # Terminal emulator to launch apps that need a terminal
-    terminal = "kitty"
+    terminal = "alacritty"
+
+    # Close the process after configured timeout
+    timeout 25
 
     theme:
         # Border color of panels
@@ -28,7 +31,7 @@ launcher:
         highlight = "blue"
 
         # Border style ("plain", "rounded", "thick", "double")
-        border_style = "rounded"
+        border_style = "plain"
 
         # Highlight type ("background" or "text")
         highlight_type = "background"
