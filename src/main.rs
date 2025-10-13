@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod events;
 mod icons;
+mod launch;
 mod ui;
 
 use ratatui::{
@@ -83,37 +84,15 @@ fn main() -> Result<()> {
     
     // Launch selected app (if any)
     if let Some(command) = app.app_to_launch {
-        launch_app(&command)?;
+        if let Some(entry) = app.apps.iter().find(|a| a.exec == command) {
+            crate::launch::launch_app(entry, &app.config);
+        } else {
+            // Fallback: run directly
+            use std::process::Command;
+            let _ = Command::new("sh").arg("-c").arg(command).spawn();
+        }
     }
-    
-    Ok(())
-}
 
-fn launch_app(command: &str) -> eyre::Result<()> {
-    use std::process::Command;
-    use std::os::unix::process::CommandExt; // for pre_exec
-    use libc;
-    
-    let parts: Vec<&str> = command.split_whitespace().collect();
-    if parts.is_empty() {
-        return Ok(());
-    }
-    
-    let mut cmd = Command::new(parts[0]);
-    cmd.args(&parts[1..])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    
-    unsafe {
-        cmd.pre_exec(|| {
-            libc::setsid();
-            Ok(())
-        });
-    }
-    
-    cmd.spawn()?;
-    
     Ok(())
 }
 
@@ -129,10 +108,17 @@ fn run_app<B: ratatui::backend::Backend>(
         
         // Handle input
         if crossterm::event::poll(std::time::Duration::from_millis(100))? {
-            if let event::Event::Key(key) = event::read()? {
-                if events::handle_key(app, key)? {
-                    break;
+            match event::read()? {
+                event::Event::Key(key) => {
+                    if events::handle_key(app, key)? {
+                        break;
+                    }
                 }
+                event::Event::Resize(_, _) => {
+                    // Re-warmup icons after resize to fix glyph sizing
+                    warmup_icons(terminal, app, cfg)?;
+                }
+                _ => {}
             }
         }
     }
@@ -177,4 +163,3 @@ fn warmup_icons<B: ratatui::backend::Backend>(
 
     Ok(())
 }
-

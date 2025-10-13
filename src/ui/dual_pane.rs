@@ -27,14 +27,22 @@ pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, confi
         .cloned()
         .unwrap_or_default();
     
-    // Filter apps in selected category with optional search query
-    let query = app.search_query.to_lowercase();
-    let apps_to_show: Vec<String> = app.apps
+    // Filter apps in selected category with fuzzy matching
+    let query = &app.search_query;
+    let mut apps_with_scores: Vec<(String, i64)> = app.apps
         .iter()
-        .filter(|a| a.category == selected_category_name &&
-                    (app.search_query.is_empty() || a.name.to_lowercase().contains(&query)))
-        .map(|a| a.name.clone())
+        .filter(|a| a.category == selected_category_name)
+        .filter_map(|a| {
+            app.matches_search(&a.name, query).map(|score| (a.name.clone(), score))
+        })
         .collect();
+    
+    // Sort by fuzzy match score (higher is better)
+    if !app.search_query.is_empty() {
+        apps_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
+    }
+    
+    let apps_to_show: Vec<String> = apps_with_scores.into_iter().map(|(name, _)| name).collect();
     
     // Clamp selected app index
     if !apps_to_show.is_empty() && app.selected_app >= apps_to_show.len() {

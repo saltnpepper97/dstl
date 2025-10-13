@@ -1,0 +1,37 @@
+@author "Dustin Pilgrim"
+@Description "Dustin's simple TUI launcher"
+
+launcher:
+    # Whether to use dmenu-style fuzzy search mode
+    dmenu = false
+
+    # Where the search bar appears (options: "top" or "bottom")
+    search_position = "bottom"
+
+    # Startup mode (options: "single" or "dual")
+    startup_mode = "single"
+
+    # Automatically refocus search field when switching modes
+    focus_search_on_switch = true
+
+    # Terminal emulator to launch apps that need a terminal
+    terminal = "kitty"
+
+    theme:
+        # Border color of panels
+        border = "white"
+
+        # Highlight color for focused elements
+        focus = "yellow"
+
+        # Color used when highlighting matched entries
+        highlight = "blue"
+
+        # Border style ("plain", "rounded", "thick", "double")
+        border_style = "rounded"
+
+        # Highlight type ("background" or "text")
+        highlight_type = "background"
+    end
+end
+

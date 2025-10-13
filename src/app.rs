@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 use crate::config::LauncherConfig;
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -21,7 +23,6 @@ pub enum SinglePaneMode {
     DesktopApps, // load .desktop apps
 }
 
-#[derive(Debug, Clone)]
 pub struct App {
     pub mode: Mode,
     pub single_pane_mode: SinglePaneMode,
@@ -34,6 +35,45 @@ pub struct App {
     pub focus: Focus,
     pub app_to_launch: Option<String>,
     pub config: LauncherConfig,
+    fuzzy_matcher: SkimMatcherV2,
+}
+
+impl Clone for App {
+    fn clone(&self) -> Self {
+        Self {
+            mode: self.mode,
+            single_pane_mode: self.single_pane_mode,
+            should_quit: self.should_quit,
+            search_query: self.search_query.clone(),
+            categories: self.categories.clone(),
+            apps: self.apps.clone(),
+            selected_category: self.selected_category,
+            selected_app: self.selected_app,
+            focus: self.focus,
+            app_to_launch: self.app_to_launch.clone(),
+            config: self.config.clone(),
+            fuzzy_matcher: SkimMatcherV2::default(),
+        }
+    }
+}
+
+impl std::fmt::Debug for App {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("App")
+            .field("mode", &self.mode)
+            .field("single_pane_mode", &self.single_pane_mode)
+            .field("should_quit", &self.should_quit)
+            .field("search_query", &self.search_query)
+            .field("categories", &self.categories)
+            .field("apps", &self.apps)
+            .field("selected_category", &self.selected_category)
+            .field("selected_app", &self.selected_app)
+            .field("focus", &self.focus)
+            .field("app_to_launch", &self.app_to_launch)
+            .field("config", &self.config)
+            .field("fuzzy_matcher", &"SkimMatcherV2")
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +81,21 @@ pub struct AppEntry {
     pub name: String,
     pub category: String,
     pub exec: String,
+    pub terminal: bool,
+}
+
+impl AppEntry {
+    /// Returns true if this app should be run in a terminal.
+    pub fn needs_terminal(&self) -> bool {
+        // Check for obvious CLI category or "terminal" hints
+        self.category == "CLI"
+            || self.exec.contains("bash")
+            || self.exec.contains("sh ")
+            || self.exec.contains("python")
+            || self.exec.contains("cargo")
+            || self.exec.contains("make")
+            || self.exec.contains("npm")
+    }
 }
 
 impl App {
@@ -69,6 +124,7 @@ impl App {
             focus,
             app_to_launch: None,
             config: config.clone(),
+            fuzzy_matcher: SkimMatcherV2::default(),
         }
     }
 
@@ -98,6 +154,14 @@ impl App {
         // Reset selection indexes
         self.selected_category = 0;
         self.selected_app = 0;
+    }
+
+    /// Check if an app matches the search query using fuzzy matching
+    pub fn matches_search(&self, app_name: &str, query: &str) -> Option<i64> {
+        if query.is_empty() {
+            return Some(0); // Empty query matches everything
+        }
+        self.fuzzy_matcher.fuzzy_match(app_name, query)
     }
 
     /// Load apps based on the single pane mode
@@ -141,6 +205,7 @@ impl App {
                         let mut categories = None;
                         let mut no_display = false;
                         let mut in_desktop_entry = false;
+                        let mut terminal = false;
 
                         for line in content.lines() {
                             let line = line.trim();
@@ -175,6 +240,9 @@ impl App {
                             if line == "NoDisplay=true" || line == "Hidden=true" {
                                 no_display = true;
                             }
+                            if line == "Terminal=true" {
+                                terminal = true;
+                            }
                         }
 
                         // Skip apps marked as NoDisplay or Hidden
@@ -207,6 +275,7 @@ impl App {
                                 name: name.clone(),
                                 category: cat_group.clone(),
                                 exec: exec_clean,
+                                terminal,
                             });
 
                             category_map
@@ -286,6 +355,7 @@ impl App {
                             name: name.to_string(),
                             category: "CLI".to_string(),
                             exec: name.to_string(),
+                            terminal: true,
                         });
                     }
                 }

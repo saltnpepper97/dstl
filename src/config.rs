@@ -5,7 +5,7 @@ use rune_cfg::RuneConfig;
 use serde::{Deserialize, Serialize};
 use ratatui::widgets::BorderType;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SearchPosition {
     Top,
     Bottom,
@@ -33,6 +33,7 @@ pub struct LauncherConfig {
     pub start_mode: StartMode,
     pub focus_search_on_switch: bool,
     pub colors: LauncherTheme,
+    pub terminal: String,
 }
 
 impl LauncherTheme {
@@ -93,6 +94,8 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
     let config = RuneConfig::from_str(&content)?;
     
     let dmenu = try_get_bool(&config, "launcher.dmenu", false);
+
+    let terminal = try_get_string(&config, "launcher.terminal", "foot");
     
     let search_position_str = try_get_string(&config, "launcher.search_position", "top");
     let search_position = match search_position_str.to_lowercase().as_str() {
@@ -127,7 +130,8 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
         search_position, 
         start_mode,
         focus_search_on_switch: focus_search,
-        colors 
+        colors,
+        terminal,
     })
 }
 
