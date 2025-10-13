@@ -34,6 +34,7 @@ pub struct LauncherConfig {
     pub focus_search_on_switch: bool,
     pub colors: LauncherTheme,
     pub terminal: String,
+    pub timeout: u64,
 }
 
 impl LauncherTheme {
@@ -88,15 +89,27 @@ fn try_get_string(config: &RuneConfig, base_path: &str, default: &str) -> String
     default.to_string()
 }
 
+fn try_get_u64(config: &RuneConfig, base_path: &str, default: u64) -> u64 {
+    let hyphenated = base_path.replace('_', "-");
+    if let Ok(val) = config.get::<u64>(&hyphenated) {
+        return val;
+    }
+    let underscored = base_path.replace('-', "_");
+    if let Ok(val) = config.get::<u64>(&underscored) {
+        return val;
+    }
+    default
+}
+
 // --- Load config ---
 pub fn load_config(path: &str) -> Result<LauncherConfig> {
     let content = std::fs::read_to_string(path)?;
     let config = RuneConfig::from_str(&content)?;
     
     let dmenu = try_get_bool(&config, "launcher.dmenu", false);
-
     let terminal = try_get_string(&config, "launcher.terminal", "foot");
-    
+    let timeout = try_get_u64(&config, "launcher.timeout", 100);
+
     let search_position_str = try_get_string(&config, "launcher.search_position", "top");
     let search_position = match search_position_str.to_lowercase().as_str() {
         "bottom" => SearchPosition::Bottom,
@@ -132,6 +145,7 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
         focus_search_on_switch: focus_search,
         colors,
         terminal,
+        timeout,
     })
 }
 

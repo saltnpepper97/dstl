@@ -9,7 +9,7 @@ use ratatui::{
     backend::CrosstermBackend,
     Terminal,
 };
-use std::io;
+use std::{io, time::{Duration, Instant}};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -23,7 +23,6 @@ fn main() -> Result<()> {
     // Enable colorized error reporting
     color_eyre::install()?;
     
-    // Load launcher configuration
     let cfg = load_launcher_config();
     
     let single_pane_mode = if cfg.dmenu {
@@ -37,7 +36,6 @@ fn main() -> Result<()> {
         StartMode::Single => Mode::SinglePane,
     };
     
-    // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -45,7 +43,6 @@ fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     
-    // Initialize app state based on config mode
     let mut app = App::new(single_pane_mode, start_mode, &cfg);
     warmup_icons(&mut terminal, &app, &cfg)?;
 
@@ -54,14 +51,11 @@ fn main() -> Result<()> {
         let old_mode = app.mode;
         let old_focus = app.focus;
 
-        // Temporarily switch to dual-pane and focus categories
         app.mode = Mode::DualPane;
         app.focus = Focus::Categories;
 
-        // Draw a hidden frame to "warm up" glyph rendering
         terminal.draw(|f| ui::draw(f, &mut app, cfg.search_position.clone(), &cfg))?;
 
-        // Restore original mode/focus
         app.mode = old_mode;
         app.focus = old_focus;
     }
@@ -102,27 +96,44 @@ fn run_app<B: ratatui::backend::Backend>(
     search_position: &config::SearchPosition,
     cfg: &config::LauncherConfig,
 ) -> Result<()> {
+    let mut last_input = Instant::now();
+
     loop {
-        // Draw UI
+        // Always draw current state
         terminal.draw(|f| ui::draw(f, app, search_position.clone(), cfg))?;
-        
-        // Handle input
-        if crossterm::event::poll(std::time::Duration::from_millis(100))? {
+
+        // Calculate remaining time until timeout
+        let poll_duration = if cfg.timeout > 0 {
+            let elapsed = last_input.elapsed().as_secs();
+            if elapsed >= cfg.timeout {
+                break; // Timeout reached
+            }
+            // Poll for the remaining time or 100ms, whichever is shorter
+            let remaining_secs = cfg.timeout - elapsed;
+            Duration::from_millis((remaining_secs * 1000).min(100))
+        } else {
+            // No timeout configured, use default poll interval
+            Duration::from_millis(100)
+        };
+
+        // Poll for events with calculated duration
+        if crossterm::event::poll(poll_duration)? {
             match event::read()? {
                 event::Event::Key(key) => {
+                    last_input = Instant::now();
                     if events::handle_key(app, key)? {
                         break;
                     }
                 }
                 event::Event::Resize(_, _) => {
-                    // Re-warmup icons after resize to fix glyph sizing
+                    last_input = Instant::now();
                     warmup_icons(terminal, app, cfg)?;
                 }
                 _ => {}
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -135,31 +146,25 @@ fn warmup_icons<B: ratatui::backend::Backend>(
         return Ok(());
     }
 
-    // Clone the app so we don't mutate real state
     let mut warmup_app = app.clone();
 
-    // If starting in DualPane, briefly switch to SinglePane and back
     if warmup_app.mode == Mode::DualPane {
-        // Save original focus
         let old_focus = warmup_app.focus;
 
-        // Switch to SinglePane
         warmup_app.mode = Mode::SinglePane;
         warmup_app.focus = Focus::Apps; // Single-pane leftmost focus
         terminal.draw(|f| ui::draw(f, &mut warmup_app, cfg.search_position.clone(), cfg))?;
 
-        // Switch back to DualPane
         warmup_app.mode = Mode::DualPane;
         warmup_app.focus = Focus::Categories;
         terminal.draw(|f| ui::draw(f, &mut warmup_app, cfg.search_position.clone(), cfg))?;
 
-        // Restore original focus
         warmup_app.focus = old_focus;
     } else {
-        // SinglePane start: just draw once
         warmup_app.focus = Focus::Apps;
         terminal.draw(|f| ui::draw(f, &mut warmup_app, cfg.search_position.clone(), cfg))?;
     }
 
     Ok(())
 }
+
