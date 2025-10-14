@@ -183,12 +183,21 @@ impl App {
 
         let mut apps = Vec::new();
         let mut category_map: HashMap<String, Vec<String>> = HashMap::new();
-        let mut seen_apps: HashSet<String> = HashSet::new(); // Track seen app names
+        let mut seen_apps: HashSet<String> = HashSet::new();
+        let mut seen_files: HashSet<String> = HashSet::new(); // Track processed .desktop files
 
         let home = std::env::var("HOME").unwrap_or_else(|_| String::from("/home"));
         let local_dir = format!("{}/.local/share/applications", home);
 
         let paths = vec![local_dir, "/usr/share/applications".to_string()];
+
+        // Get current desktop environment once
+        let current_desktops: Vec<String> = std::env::var("XDG_CURRENT_DESKTOP")
+            .or_else(|_| std::env::var("DESKTOP_SESSION"))
+            .unwrap_or_default()
+            .split(':')
+            .map(|s| s.trim().to_lowercase())
+            .collect();
 
         for dir in paths {
             if let Ok(entries) = fs::read_dir(&dir) {
@@ -198,50 +207,81 @@ impl App {
                         continue;
                     }
 
+                    // Get the base filename to check for duplicates across directories
+                    let filename = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_string();
+                    
+                    // Skip if we've already processed this .desktop file from another directory
+                    if seen_files.contains(&filename) {
+                        continue;
+                    }
+                    seen_files.insert(filename.clone());
+
                     if let Ok(content) = fs::read_to_string(&path) {
                         let mut name = None;
                         let mut generic_name = None;
                         let mut exec = None;
                         let mut categories = None;
                         let mut no_display = false;
-                        let mut in_desktop_entry = false;
                         let mut terminal = false;
+                        let mut only_show_in: Option<Vec<String>> = None;
+                        let mut not_show_in: Option<Vec<String>> = None;
+                        let mut in_desktop_entry = false;
 
                         for line in content.lines() {
                             let line = line.trim();
                             
-                            // Track if we're in the [Desktop Entry] section
-                            if line == "[Desktop Entry]" {
-                                in_desktop_entry = true;
-                                continue;
-                            } else if line.starts_with('[') {
-                                in_desktop_entry = false;
+                            // Track sections
+                            if line.starts_with('[') {
+                                in_desktop_entry = line == "[Desktop Entry]";
                                 continue;
                             }
                             
+                            // Only parse inside [Desktop Entry] section
                             if !in_desktop_entry {
                                 continue;
                             }
                             
-                            // Get the base Name= (without locale)
-                            if line.starts_with("Name=") && !line.contains('[') {
-                                name = Some(line["Name=".len()..].trim().to_string());
-                            }
-                            // Fallback to GenericName if Name is not found
-                            if line.starts_with("GenericName=") && !line.contains('[') {
-                                generic_name = Some(line["GenericName=".len()..].trim().to_string());
-                            }
-                            if line.starts_with("Exec=") {
-                                exec = Some(line["Exec=".len()..].trim().to_string());
-                            }
-                            if line.starts_with("Categories=") {
-                                categories = Some(line["Categories=".len()..].trim().to_string());
-                            }
-                            if line == "NoDisplay=true" || line == "Hidden=true" {
-                                no_display = true;
-                            }
-                            if line == "Terminal=true" {
-                                terminal = true;
+                            // Parse key=value pairs
+                            if let Some((key, value)) = line.split_once('=') {
+                                // Skip localized entries like Name[af]=, Comment[de]=, etc.
+                                if key.contains('[') {
+                                    continue;
+                                }
+                                
+                                let key = key.trim();
+                                let value = value.trim();
+                                
+                                match key {
+                                    "Name" => name = Some(value.to_string()),
+                                    "GenericName" => generic_name = Some(value.to_string()),
+                                    "Exec" => exec = Some(value.to_string()),
+                                    "Categories" => categories = Some(value.to_string()),
+                                    "NoDisplay" => no_display = value == "true",
+                                    "Hidden" => no_display = no_display || value == "true",
+                                    "Terminal" => terminal = value == "true",
+                                    "OnlyShowIn" => {
+                                        only_show_in = Some(
+                                            value.split(';')
+                                                .map(|s| s.trim())
+                                                .filter(|s| !s.is_empty())
+                                                .map(|s| s.to_string())
+                                                .collect()
+                                        );
+                                    }
+                                    "NotShowIn" => {
+                                        not_show_in = Some(
+                                            value.split(';')
+                                                .map(|s| s.trim())
+                                                .filter(|s| !s.is_empty())
+                                                .map(|s| s.to_string())
+                                                .collect()
+                                        );
+                                    }
+                                    _ => {}
+                                }
                             }
                         }
 
@@ -252,6 +292,25 @@ impl App {
                         
                         // Use Name, or fallback to GenericName
                         let name = name.or(generic_name);
+
+                        // Check OnlyShowIn - skip if specified and current desktop not in list
+                        if let Some(desktops) = &only_show_in {
+                            let allowed = desktops.iter()
+                                .any(|d| current_desktops.contains(&d.to_lowercase()));
+                            
+                            if !allowed {
+                                continue;
+                            }
+                        }
+
+                        // Check NotShowIn - skip if current desktop is in list
+                        if let Some(desktops) = &not_show_in {
+                            let blocked = desktops.iter()
+                                .any(|d| current_desktops.contains(&d.to_lowercase()));
+                            if blocked {
+                                continue;
+                            }
+                        }
 
                         if let (Some(name), Some(exec)) = (name, exec) {
                             // Skip if we've already seen this app name
@@ -264,7 +323,6 @@ impl App {
                             let cat_group = if let Some(cats) = categories {
                                 Self::group_category(&cats, &name)
                             } else {
-                                // Apps without Categories field go to Utilities by default
                                 Self::group_category("", &name)
                             };
 
