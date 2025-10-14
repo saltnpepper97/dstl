@@ -233,11 +233,10 @@ fn update_selection_after_search(app: &mut App) {
         Mode::DualPane => {
             // In dual-pane, find first matching app across all categories
             for (cat_idx, cat_name) in app.categories.iter().enumerate() {
-                let apps_in_cat: Vec<_> = app.apps.iter()
-                    .filter(|a| &a.category == cat_name && app.matches_search(&a.name, query).is_some())
-                    .collect();
+                let has_match = app.apps.iter()
+                    .any(|a| &a.category == cat_name && app.matches_search(&a.name, query).is_some());
 
-                if !apps_in_cat.is_empty() {
+                if has_match {
                     app.selected_category = cat_idx;
                     app.selected_app = 0;
                     return;
@@ -246,36 +245,61 @@ fn update_selection_after_search(app: &mut App) {
             // No match found - leave selection as is
         }
         Mode::SinglePane => {
-            // In single-pane, reset to first match
+            // In single-pane, reset to first match (which will be the best match after sorting)
             app.selected_app = 0;
         }
     }
 }
 
-/// Return currently selected app
+/// Return currently selected app - MUST match UI sorting logic
 fn get_selected_app(app: &App) -> Option<&crate::app::AppEntry> {
+    let query = &app.search_query;
+    
     match app.mode {
         Mode::DualPane => {
             let cat_name = app.categories.get(app.selected_category)?;
-            let query = &app.search_query;
-            let filtered: Vec<_> = app.apps.iter()
-                .filter(|a| &a.category == cat_name && 
-                    (app.search_query.is_empty() || app.matches_search(&a.name, query).is_some()))
+            
+            // Filter apps in selected category
+            let mut apps_with_scores: Vec<(&crate::app::AppEntry, i64)> = app.apps.iter()
+                .filter(|a| &a.category == cat_name)
+                .filter_map(|a| {
+                    app.matches_search(&a.name, query).map(|score| (a, score))
+                })
                 .collect();
-            filtered.get(app.selected_app).copied()
+            
+            // Sort by fuzzy match score (higher is better) - SAME AS UI
+            if !app.search_query.is_empty() {
+                apps_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
+            }
+            
+            apps_with_scores.get(app.selected_app).map(|(app_entry, _)| *app_entry)
         }
         Mode::SinglePane => {
-            let query = &app.search_query;
-            let filtered: Vec<_> = app.apps.iter()
-                .filter(|a| app.search_query.is_empty() || app.matches_search(&a.name, query).is_some())
-                .collect();
-            filtered.get(app.selected_app).copied()
+            // Filter and sort apps - SAME AS UI
+            let mut apps_with_scores: Vec<(&crate::app::AppEntry, i64)> = if app.search_query.is_empty() {
+                app.apps.iter().map(|a| (a, 0i64)).collect()
+            } else {
+                app.apps.iter()
+                    .filter_map(|a| {
+                        app.matches_search(&a.name, query).map(|score| (a, score))
+                    })
+                    .collect()
+            };
+            
+            // Sort by score (higher is better) - SAME AS UI
+            if !app.search_query.is_empty() {
+                apps_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
+            }
+            
+            apps_with_scores.get(app.selected_app).map(|(app_entry, _)| *app_entry)
         }
     }
 }
 
-/// Count filtered apps for navigation in the currently selected category
+/// Count filtered apps for navigation in the currently selected category - MUST match UI
 fn count_filtered_apps_in_current_category(app: &App) -> usize {
+    let query = &app.search_query;
+    
     match app.mode {
         Mode::DualPane => {
             let cat_name = match app.categories.get(app.selected_category) {
@@ -283,17 +307,15 @@ fn count_filtered_apps_in_current_category(app: &App) -> usize {
                 None => return 0,
             };
 
-            let query = &app.search_query;
             app.apps.iter()
-                .filter(|a| &a.category == cat_name && 
-                    (app.search_query.is_empty() || app.matches_search(&a.name, query).is_some()))
+                .filter(|a| &a.category == cat_name)
+                .filter(|a| app.matches_search(&a.name, query).is_some())
                 .count()
         }
         Mode::SinglePane => {
             if app.search_query.is_empty() {
                 app.apps.len()
             } else {
-                let query = &app.search_query;
                 app.apps.iter()
                     .filter(|a| app.matches_search(&a.name, query).is_some())
                     .count()
