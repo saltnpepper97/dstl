@@ -53,7 +53,6 @@ pub fn render_search_bar(
         LauncherTheme::parse_color(&config.colors.border)
     };
 
-    // text color same as border, no background
     let text_color = border_color;
 
     let block = Block::default()
@@ -62,14 +61,28 @@ pub fn render_search_bar(
         .border_type(LauncherTheme::parse_border_type(&config.colors.border_style))
         .border_style(Style::default().fg(border_color));
 
+    // Add padding spaces around text
     let padded_query = format!(" {} ", query);
+
+    // Compute the visible width inside the box (minus borders)
+    let inner_width = area.width.saturating_sub(2); // minus left/right borders
+
+    // Determine horizontal scroll offset
+    // If query is longer than visible width, scroll so the end of the text is visible
+    let scroll_offset = if padded_query.len() as u16 > inner_width {
+        padded_query.len() as u16 - inner_width
+    } else {
+        0
+    };
 
     let paragraph = Paragraph::new(padded_query)
         .block(block)
-        .style(Style::default().fg(text_color));
+        .style(Style::default().fg(text_color))
+        .scroll((0, scroll_offset));
 
     f.render_widget(paragraph, area);
 }
+
 
 pub fn render_list(
     f: &mut Frame,
