@@ -1,9 +1,10 @@
 use std::path::PathBuf;
-use eyre::Result;
+use std::process;
+use eyre::{Result, eyre};
 use ratatui::style::Color;
+use ratatui::widgets::BorderType;
 use rune_cfg::RuneConfig;
 use serde::{Deserialize, Serialize};
-use ratatui::widgets::BorderType;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SearchPosition {
@@ -49,7 +50,6 @@ impl LauncherTheme {
             "magenta" => Color::Magenta,
             "cyan" => Color::Cyan,
             "white" => Color::White,
-            // fallback to default
             _ => Color::Reset,
         }
     }
@@ -65,68 +65,68 @@ impl LauncherTheme {
     }
 }
 
-fn try_get_bool(config: &RuneConfig, base_path: &str, default: bool) -> bool {
-    let hyphenated = base_path.replace('_', "-");
-    if let Ok(val) = config.get::<bool>(&hyphenated) {
-        return val;
-    }
-    let underscored = base_path.replace('-', "_");
-    if let Ok(val) = config.get::<bool>(&underscored) {
-        return val;
-    }
-    default
-}
-
-fn try_get_string(config: &RuneConfig, base_path: &str, default: &str) -> String {
-    let hyphenated = base_path.replace('_', "-");
-    if let Ok(val) = config.get::<String>(&hyphenated) {
-        return val;
-    }
-    let underscored = base_path.replace('-', "_");
-    if let Ok(val) = config.get::<String>(&underscored) {
-        return val;
-    }
-    default.to_string()
-}
-
-fn try_get_u64(config: &RuneConfig, base_path: &str, default: u64) -> u64 {
-    let hyphenated = base_path.replace('_', "-");
-    if let Ok(val) = config.get::<u64>(&hyphenated) {
-        return val;
-    }
-    let underscored = base_path.replace('-', "_");
-    if let Ok(val) = config.get::<u64>(&underscored) {
-        return val;
-    }
-    default
-}
-
 // --- Load config ---
 pub fn load_config(path: &str) -> Result<LauncherConfig> {
-    let content = std::fs::read_to_string(path)?;
-    let config = RuneConfig::from_str(&content)?;
-    
-    let dmenu = try_get_bool(&config, "launcher.dmenu", false);
-    let terminal = try_get_string(&config, "launcher.terminal", "foot");
-    let timeout = try_get_u64(&config, "launcher.timeout", 100);
+    let config = RuneConfig::from_file(path)
+        .map_err(|e| eyre!("Failed to load config: {}", e))?;
 
-    let search_position_str = try_get_string(&config, "launcher.search_position", "top");
-    let search_position = match search_position_str.to_lowercase().as_str() {
-        "bottom" => SearchPosition::Bottom,
-        _ => SearchPosition::Top,
-    };
+    // --- Fetch values with validation ---
+    let dmenu = config.get_or("launcher.dmenu", false);
+    let terminal = config.get_or("launcher.terminal", "foot".to_string());
+    let timeout = config.get("launcher.timeout")
+        .map_err(|e| eyre!("{}", e))?;
+
+    // Validate search_position
+    let search_position_str = config.get_string_enum(
+        "launcher.search_position", 
+        &["top", "bottom"]
+    ).unwrap_or_else(|_| "top".to_string());
     
-    let start_mode_str = try_get_string(&config, "launcher.startup_mode", "single");
+    let search_position = match search_position_str.to_lowercase().as_str() {
+        "top" => SearchPosition::Top,
+        "bottom" => SearchPosition::Bottom,
+        _ => SearchPosition::Top, // Already validated, this is just a fallback
+    };
+
+    // Validate startup_mode
+    let start_mode_str = config.get_string_enum(
+        "launcher.startup_mode",
+        &["single", "dual"]
+    ).unwrap_or_else(|_| "single".to_string());
+    
     let start_mode = match start_mode_str.to_lowercase().as_str() {
+        "single" => StartMode::Single,
         "dual" => StartMode::Dual,
         _ => StartMode::Single,
     };
+
+    // Validate colors
+    let border_color = config.get_string_enum(
+        "launcher.theme.border",
+        &["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "reset"]
+    ).unwrap_or_else(|_| "white".to_string());
+
+    let focus_color = config.get_string_enum(
+        "launcher.theme.focus",
+        &["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "reset"]
+    ).map_err(|e| eyre!("{}", e))?;
+
+    let highlight_color = config.get_string_enum(
+        "launcher.theme.highlight",
+        &["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "reset"]
+    ).unwrap_or_else(|_| "blue".to_string());
+
+    // Validate border style
+    let border_style = config.get_string_enum(
+        "launcher.theme.border_style",
+        &["plain", "rounded", "thick", "double"]
+    ).map_err(|e| eyre!("{}", e))?;
+
+    let highlight_type = config.get_or("launcher.theme.highlight_type", "background".to_string());
     
-    let border_color = try_get_string(&config, "launcher.theme.border", "White");
-    let focus_color = try_get_string(&config, "launcher.theme.focus", "Yellow");
-    let highlight_color = try_get_string(&config, "launcher.theme.highlight", "Blue");
-    let border_style = try_get_string(&config, "launcher.theme.border_style", "plain");
-    let highlight_type = try_get_string(&config, "launcher.theme.highlight_type", "background");
+    // Validate boolean - will automatically error if value is invalid
+    let focus_search = config.get("launcher.focus_search_on_switch")
+        .map_err(|e| eyre!("{}", e))?;
 
     let colors = LauncherTheme {
         border: border_color,
@@ -135,12 +135,10 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
         border_style,
         highlight_type,
     };
-    
-    let focus_search = try_get_bool(&config, "launcher.focus_search_on_switch", false);
-    
-    Ok(LauncherConfig { 
-        dmenu, 
-        search_position, 
+
+    Ok(LauncherConfig {
+        dmenu,
+        search_position,
         start_mode,
         focus_search_on_switch: focus_search,
         colors,
@@ -149,9 +147,16 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
     })
 }
 
+/// Top-level config loader that exits gracefully on failure.
 pub fn load_launcher_config() -> LauncherConfig {
     let path = find_config().expect("No launcher.rune config found");
-    load_config(&path.to_string_lossy()).expect("Failed to parse launcher.rune config")
+    match load_config(&path.to_string_lossy()) {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            eprintln!("❌ Configuration error:\n{}", err);
+            process::exit(1);
+        }
+    }
 }
 
 fn find_config() -> Option<PathBuf> {
