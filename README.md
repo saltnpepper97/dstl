@@ -1,5 +1,1 @@
-<p align="center">
-  <img src="assets/dstl.png" alt="Stasis Logo" style="width: 100%; height: auto;"/>
-</p>
-
-<h1 align="center">DSTL</h1>
+<h1 align="center">DSTL - Dustin's Simpe TUI Laundher</h1>
