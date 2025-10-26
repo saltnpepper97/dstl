@@ -96,13 +96,11 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
                             }
                         }
                         Focus::Categories => {
-                            if app.selected_category > 0 && app.search_query.is_empty() {
-                                // normal move up
+                            if app.selected_category > 0 {
                                 app.selected_category -= 1;
                                 app.selected_app = 0;
                             } else {
-                                // move to search bar if at top or search is active
-                                app.focus = Focus::Search;
+                                app.focus = Focus::Search; // move to search bar no matter where it is
                             }
                         }
                     }
@@ -302,4 +300,3 @@ fn count_filtered_apps_in_current_category(app: &App) -> usize {
         }
     }
 }
-

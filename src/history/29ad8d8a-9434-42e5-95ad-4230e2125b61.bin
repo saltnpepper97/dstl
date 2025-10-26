@@ -96,12 +96,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
                             }
                         }
                         Focus::Categories => {
-                            if app.selected_category > 0 && app.search_query.is_empty() {
-                                // normal move up
+                            if app.selected_category > 0 {
                                 app.selected_category -= 1;
                                 app.selected_app = 0;
-                            } else {
-                                // move to search bar if at top or search is active
+                            } else if app.config.search_position == SearchPosition::Top {
                                 app.focus = Focus::Search;
                             }
                         }
@@ -231,19 +229,25 @@ fn update_selection_after_search(app: &mut App) {
 
     match app.mode {
         Mode::DualPane => {
-            // find first matching app across all categories
-            for (cat_idx, cat_name) in app.categories.iter().enumerate() {
-                let has_match = app.apps.iter()
-                    .any(|a| &a.category == cat_name && app.matches_search(&a.name, &app.search_query).is_some());
+            // Only reset selected_app to first match in current category
+            let cat_name = app.categories.get(app.selected_category);
+            if let Some(cat_name) = cat_name {
+                let first_match_idx = app.apps.iter()
+                    .enumerate()
+                    .filter(|(_, a)| &a.category == cat_name)
+                    .filter(|(_, a)| app.matches_search(&a.name, &app.search_query).is_some())
+                    .map(|(idx, _)| idx)
+                    .next();
 
-                if has_match {
-                    app.selected_category = cat_idx;
+                if let Some(_) = first_match_idx {
                     app.selected_app = 0;
-                    return;
                 }
             }
         }
-        Mode::SinglePane => { app.selected_app = 0; }
+        Mode::SinglePane => {
+            // Reset to first match (best match after sorting)
+            app.selected_app = 0;
+        }
     }
 }
 
@@ -302,4 +306,3 @@ fn count_filtered_apps_in_current_category(app: &App) -> usize {
         }
     }
 }
-

@@ -1,0 +1,19 @@
+// Determine selected category based on search
+let selected_category_name = if !query_lower.is_empty() {
+    if let Some(best_app) = app.apps.iter()
+        .filter_map(|a| app.matches_search(&a.name, &query_lower).map(|score| (a, score)))
+        .max_by_key(|(_, score)| *score)
+        .map(|(a, _)| a)
+    {
+        best_app.category.clone()
+    } else {
+        app.categories.get(app.selected_category).cloned().unwrap_or_default()
+    }
+} else {
+    app.categories.get(app.selected_category).cloned().unwrap_or_default()
+};
+
+// Always update selected_category to match the best search result
+if let Some(idx) = app.categories.iter().position(|c| c == &selected_category_name) {
+    app.selected_category = idx;
+}

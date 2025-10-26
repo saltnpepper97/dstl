@@ -1,0 +1,8 @@
+Focus::Categories => {
+    if app.selected_category > 0 {
+        app.selected_category -= 1;
+        app.selected_app = 0;
+    } else if app.config.search_position == SearchPosition::Top {
+        app.focus = Focus::Search;
+    }
+}

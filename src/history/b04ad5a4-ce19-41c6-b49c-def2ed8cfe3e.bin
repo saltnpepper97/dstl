@@ -21,19 +21,25 @@ pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, confi
 
     // Determine selected category based on search
     let selected_category_name = if !query_lower.is_empty() {
-        app.apps.iter()
+        if let Some(best_app) = app.apps.iter()
             .filter_map(|a| app.matches_search(&a.name, &query_lower).map(|score| (a, score)))
             .max_by_key(|(_, score)| *score)
-            .map(|(a, _)| a.category.clone())
+            .map(|(a, _)| a)
+        {
+            best_app.category.clone()
+        } else {
             // fallback to current selection
-            .unwrap_or_else(|| app.categories.get(app.selected_category).cloned().unwrap_or_default())
+            app.categories.get(app.selected_category).cloned().unwrap_or_default()
+        }
     } else {
         app.categories.get(app.selected_category).cloned().unwrap_or_default()
     };
 
-    // Always update selected_category to match the search result
-    if let Some(idx) = app.categories.iter().position(|c| c == &selected_category_name) {
-        app.selected_category = idx;
+    // Only update app.selected_category if focus is NOT on the search bar
+    if app.focus != Focus::Search {
+        if let Some(idx) = app.categories.iter().position(|c| c == &selected_category_name) {
+            app.selected_category = idx;
+        }
     }
 
     // Filter apps to display based on category (dual-pane)
@@ -45,6 +51,7 @@ pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, confi
 
     // Sort by fuzzy score
     apps_to_show.sort_by(|a, b| b.1.cmp(&a.1));
+
     let apps_to_show: Vec<AppEntry> = apps_to_show.into_iter().map(|(a, _)| a).collect();
 
     // Clamp selected app index

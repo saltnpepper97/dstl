@@ -155,9 +155,9 @@ impl App {
 
     /// Save recent apps to disk
     pub fn save_recent(&self) -> std::io::Result<()> {
-        let config_dir = dirs::config_dir()
-            .map(|p| p.join("claw"))
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let config_dir = dirs::cache_dir()
+            .map(|p| p.join("dstl"))
+            .unwrap();
         
         fs::create_dir_all(&config_dir)?;
         let recent_file = config_dir.join("recent.json");
@@ -169,8 +169,8 @@ impl App {
 
     /// Load recent apps from disk
     pub fn load_recent(&mut self) -> std::io::Result<()> {
-        let config_dir = dirs::config_dir()
-            .map(|p| p.join("claw"))
+        let config_dir = dirs::cache_dir()
+            .map(|p| p.join("dstl"))
             .unwrap_or_else(|| std::path::PathBuf::from("."));
         
         let recent_file = config_dir.join("recent.json");
@@ -180,6 +180,47 @@ impl App {
             self.recent_apps = serde_json::from_str(&json).unwrap_or_default();
         }
         Ok(())
+    }
+
+    pub fn visible_apps(&self) -> Vec<&AppEntry> {
+        let query = &self.search_query;
+
+        // Start with all apps
+        let mut apps: Vec<&AppEntry> = if query.is_empty() {
+            self.apps.iter().collect()
+        } else {
+            // Fuzzy match when searching
+            let mut matched: Vec<(&AppEntry, i64)> = self.apps.iter()
+                .filter_map(|a| self.matches_search(&a.name, query).map(|score| (a, score)))
+                .collect();
+            matched.sort_by(|a, b| b.1.cmp(&a.1));
+            matched.into_iter().map(|(a, _)| a).collect()
+        };
+
+        // If recent_first and not searching, reorder
+        if self.search_query.is_empty() && self.config.recent_first && !self.recent_apps.is_empty() {
+            let mut recent_list = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+
+            // Add recent apps first (must exist in apps)
+            for recent_name in &self.recent_apps {
+                if let Some(app) = apps.iter().find(|a| a.name == *recent_name) {
+                    recent_list.push(*app);
+                    seen.insert(recent_name.clone());
+                }
+            }
+
+            // Add remaining apps
+            for app in apps {
+                if !seen.contains(&app.name) {
+                    recent_list.push(app);
+                }
+            }
+
+            apps = recent_list;
+        }
+
+        apps
     }
 
     /// Toggle between SinglePane and DualPane
@@ -210,12 +251,22 @@ impl App {
         self.selected_app = 0;
     }
 
-    /// Check if an app matches the search query using fuzzy matching
+    /// Check if an app matches the search query using fuzzy matching (case-insensitive)
     pub fn matches_search(&self, app_name: &str, query: &str) -> Option<i64> {
         if query.is_empty() {
             return Some(0); // Empty query matches everything
         }
-        self.fuzzy_matcher.fuzzy_match(app_name, query)
+
+        let app_name_lower = app_name.to_lowercase();
+        let query_lower = query.to_lowercase();
+
+        // Exact prefix match gets highest priority
+        if app_name_lower.starts_with(&query_lower) {
+            return Some(i64::MAX); // Push to top
+        }
+
+        // Fuzzy match otherwise
+        self.fuzzy_matcher.fuzzy_match(&app_name_lower, &query_lower)
     }
 
     /// Load apps based on the single pane mode

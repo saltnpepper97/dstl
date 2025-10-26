@@ -1,0 +1,10 @@
+Focus::Categories => {
+    if app.selected_category > 0 && app.search_query.is_empty() {
+        // normal move up
+        app.selected_category -= 1;
+        app.selected_app = 0;
+    } else {
+        // move to search bar if at top or search is active
+        app.focus = Focus::Search;
+    }
+}

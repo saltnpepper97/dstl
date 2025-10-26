@@ -1,0 +1,30 @@
+fn update_selection_after_search(app: &mut App) {
+    if app.search_query.is_empty() {
+        app.selected_category = 0;
+        app.selected_app = 0;
+        return;
+    }
+
+    match app.mode {
+        Mode::DualPane => {
+            // Only reset selected_app to first match in current category
+            let cat_name = app.categories.get(app.selected_category);
+            if let Some(cat_name) = cat_name {
+                let first_match_idx = app.apps.iter()
+                    .enumerate()
+                    .filter(|(_, a)| &a.category == cat_name)
+                    .filter(|(_, a)| app.matches_search(&a.name, &app.search_query).is_some())
+                    .map(|(idx, _)| idx)
+                    .next();
+
+                if let Some(_) = first_match_idx {
+                    app.selected_app = 0;
+                }
+            }
+        }
+        Mode::SinglePane => {
+            // Reset to first match (best match after sorting)
+            app.selected_app = 0;
+        }
+    }
+}

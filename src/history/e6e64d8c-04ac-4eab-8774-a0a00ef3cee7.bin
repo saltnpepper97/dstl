@@ -96,12 +96,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
                             }
                         }
                         Focus::Categories => {
-                            if app.selected_category > 0 && app.search_query.is_empty() {
-                                // normal move up
+                            if app.selected_category > 0 {
                                 app.selected_category -= 1;
                                 app.selected_app = 0;
-                            } else {
-                                // move to search bar if at top or search is active
+                            } else if app.config.search_position == SearchPosition::Top {
                                 app.focus = Focus::Search;
                             }
                         }
@@ -229,12 +227,14 @@ fn update_selection_after_search(app: &mut App) {
         return;
     }
 
+    let query = &app.search_query;
+    
     match app.mode {
         Mode::DualPane => {
-            // find first matching app across all categories
+            // In dual-pane, find first matching app across all categories
             for (cat_idx, cat_name) in app.categories.iter().enumerate() {
                 let has_match = app.apps.iter()
-                    .any(|a| &a.category == cat_name && app.matches_search(&a.name, &app.search_query).is_some());
+                    .any(|a| &a.category == cat_name && app.matches_search(&a.name, query).is_some());
 
                 if has_match {
                     app.selected_category = cat_idx;
@@ -242,8 +242,12 @@ fn update_selection_after_search(app: &mut App) {
                     return;
                 }
             }
+            // No match found - leave selection as is
         }
-        Mode::SinglePane => { app.selected_app = 0; }
+        Mode::SinglePane => {
+            // In single-pane, reset to first match (which will be the best match after sorting)
+            app.selected_app = 0;
+        }
     }
 }
 
@@ -302,4 +306,3 @@ fn count_filtered_apps_in_current_category(app: &App) -> usize {
         }
     }
 }
-

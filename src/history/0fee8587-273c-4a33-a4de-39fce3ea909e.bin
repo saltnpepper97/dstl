@@ -302,4 +302,3 @@ fn count_filtered_apps_in_current_category(app: &App) -> usize {
         }
     }
 }
-
