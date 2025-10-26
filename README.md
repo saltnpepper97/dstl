@@ -1,1 +1,1 @@
-<h1 align="center">DSTL - Dustin's Simpe TUI Laundher</h1>
+<h1 align="center">DSTL - Dustin's Simple TUI Launcher</h1>
