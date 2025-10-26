@@ -1,8 +1,0 @@
-Focus::Categories => {
-    if app.selected_category > 0 {
-        app.selected_category -= 1;
-        app.selected_app = 0;
-    } else {
-        app.focus = Focus::Search; // move to search bar no matter where it is
-    }
-}
