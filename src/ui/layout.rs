@@ -56,7 +56,7 @@ pub fn render_search_bar(
     let text_color = border_color;
 
     let block = Block::default()
-        .title("Search")
+        .title(" Search ")
         .borders(Borders::ALL)
         .border_type(LauncherTheme::parse_border_type(&config.colors.border_style))
         .border_style(Style::default().fg(border_color));
@@ -82,7 +82,6 @@ pub fn render_search_bar(
 
     f.render_widget(paragraph, area);
 }
-
 
 pub fn render_list(
     f: &mut Frame,

@@ -36,6 +36,8 @@ pub struct LauncherConfig {
     pub colors: LauncherTheme,
     pub terminal: String,
     pub timeout: u64,
+    pub max_recent_apps: usize,
+    pub recent_first: bool,
 }
 
 impl LauncherTheme {
@@ -75,6 +77,16 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
     let terminal = config.get_or("launcher.terminal", "foot".to_string());
     let timeout = config.get("launcher.timeout")
         .map_err(|e| eyre!("{}", e))?;
+    
+    // Try both underscore and hyphen versions for max_recent_apps
+    let max_recent_apps: usize = config.get("launcher.max_recent_apps")
+        .or_else(|_| config.get("launcher.max-recent-apps"))
+        .unwrap_or(15u64) as usize;
+    
+    // Try both underscore and hyphen versions for recent_first
+    let recent_first = config.get("launcher.recent_first")
+        .or_else(|_| config.get("launcher.recent-first"))
+        .unwrap_or(false);
 
     // Validate search_position
     let search_position_str = config.get_string_enum(
@@ -144,6 +156,8 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
         colors,
         terminal,
         timeout,
+        max_recent_apps,
+        recent_first,
     })
 }
 

@@ -2,6 +2,7 @@ use nerd_font_symbols::{fa, md, oct};
 
 pub fn category_icon(category: &str) -> &'static str {
     match category {
+        "Recent" => fa::FA_CLOCK_ROTATE_LEFT,
         "Utilities" => fa::FA_GEAR,
         "Development" => fa::FA_HAMMER,
         "Network" => md::MD_EARTH,
@@ -15,4 +16,3 @@ pub fn category_icon(category: &str) -> &'static str {
         _ => oct::OCT_DASH,
     }
 }
-

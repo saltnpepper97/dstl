@@ -30,6 +30,7 @@ pub struct App {
     pub search_query: String,
     pub categories: Vec<String>,
     pub apps: Vec<AppEntry>,
+    pub recent_apps: Vec<String>,
     pub selected_category: usize,
     pub selected_app: usize,
     pub focus: Focus,
@@ -47,6 +48,7 @@ impl Clone for App {
             search_query: self.search_query.clone(),
             categories: self.categories.clone(),
             apps: self.apps.clone(),
+            recent_apps: self.recent_apps.clone(),
             selected_category: self.selected_category,
             selected_app: self.selected_app,
             focus: self.focus,
@@ -66,6 +68,7 @@ impl std::fmt::Debug for App {
             .field("search_query", &self.search_query)
             .field("categories", &self.categories)
             .field("apps", &self.apps)
+            .field("recent_apps", &self.recent_apps)
             .field("selected_category", &self.selected_category)
             .field("selected_app", &self.selected_app)
             .field("focus", &self.focus)
@@ -85,9 +88,7 @@ pub struct AppEntry {
 }
 
 impl AppEntry {
-    /// Returns true if this app should be run in a terminal.
     pub fn needs_terminal(&self) -> bool {
-        // Check for obvious CLI category or "terminal" hints
         self.category == "CLI"
             || self.exec.contains("bash")
             || self.exec.contains("sh ")
@@ -112,20 +113,73 @@ impl App {
             }
         };
 
-        Self {
+        let mut app = Self {
             mode,
             single_pane_mode,
             should_quit: false,
             search_query: String::new(),
             categories,
             apps,
+            recent_apps: Vec::new(),
             selected_category: 0,
             selected_app: 0,
             focus,
             app_to_launch: None,
             config: config.clone(),
             fuzzy_matcher: SkimMatcherV2::default(),
+        };
+
+        // Load recent apps from disk
+        let _ = app.load_recent();
+
+        app
+    }
+
+    /// Add an app to the recent list
+    pub fn add_to_recent(&mut self, app_name: String) {
+        // Remove the app if it already exists (to avoid duplicates)
+        self.recent_apps.retain(|a| a != &app_name);
+        
+        // Add to the front of the list
+        self.recent_apps.insert(0, app_name);
+        
+        // Keep only the configured number of recent apps
+        let max_recent = self.config.max_recent_apps;
+        if self.recent_apps.len() > max_recent {
+            self.recent_apps.truncate(max_recent);
         }
+
+        // Save to disk
+        let _ = self.save_recent();
+    }
+
+    /// Save recent apps to disk
+    pub fn save_recent(&self) -> std::io::Result<()> {
+        let config_dir = dirs::config_dir()
+            .map(|p| p.join("claw"))
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        
+        fs::create_dir_all(&config_dir)?;
+        let recent_file = config_dir.join("recent.json");
+        
+        let json = serde_json::to_string_pretty(&self.recent_apps)?;
+        fs::write(recent_file, json)?;
+        Ok(())
+    }
+
+    /// Load recent apps from disk
+    pub fn load_recent(&mut self) -> std::io::Result<()> {
+        let config_dir = dirs::config_dir()
+            .map(|p| p.join("claw"))
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        
+        let recent_file = config_dir.join("recent.json");
+        
+        if recent_file.exists() {
+            let json = fs::read_to_string(recent_file)?;
+            self.recent_apps = serde_json::from_str(&json).unwrap_or_default();
+        }
+        Ok(())
     }
 
     /// Toggle between SinglePane and DualPane
@@ -346,16 +400,19 @@ impl App {
             }
         }
 
-        // Build the list of grouped categories in a fixed order
+        // Build the list of grouped categories with Recent first
+        let mut categories = vec!["Recent".to_string()];
+        
         let category_order = vec![
             "Utilities", "Development", "Network", "Audio/Video", "Graphics",
             "System", "Office", "Games", "Education", "Settings"
         ];
-        let categories: Vec<String> = category_order
-            .into_iter()
-            .filter(|c| category_map.contains_key(*c))
-            .map(|s| s.to_string())
-            .collect();
+        categories.extend(
+            category_order
+                .into_iter()
+                .filter(|c| category_map.contains_key(*c))
+                .map(|s| s.to_string())
+        );
 
         (categories, apps)
     }

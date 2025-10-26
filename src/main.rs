@@ -77,13 +77,15 @@ fn main() -> Result<()> {
     }
     
     // Launch selected app (if any)
-    if let Some(command) = app.app_to_launch {
-        if let Some(entry) = app.apps.iter().find(|a| a.exec == command) {
-            crate::launch::launch_app(entry, &app.config);
+    if let Some(ref command) = app.app_to_launch {
+        if let Some(entry) = app.apps.iter().find(|a| &a.exec == command).cloned() {
+            // Add to recent before launching
+            app.add_to_recent(entry.name.clone());
+            crate::launch::launch_app(&entry, &app.config);
         } else {
-            // Fallback: run directly
+            // Fallback: run directly (not tracked in recent)
             use std::process::Command;
-            let _ = Command::new("sh").arg("-c").arg(command).spawn();
+            let _ = Command::new("sh").arg("-c").arg(command.clone()).spawn();
         }
     }
 
@@ -167,4 +169,3 @@ fn warmup_icons<B: ratatui::backend::Backend>(
 
     Ok(())
 }
-

@@ -3,7 +3,7 @@ use crate::ui::layout;
 use crate::config::{LauncherConfig, SearchPosition};
 use ratatui::Frame;
 
-/// Draw the dual-pane view
+/// Draw the dual-pane view with Recent as a category
 pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, config: &LauncherConfig) {
     // Split vertically according to search_position
     let (search_area, content_area) = layout::vertical_split(f, 3, search_position);
@@ -27,29 +27,47 @@ pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, confi
         .cloned()
         .unwrap_or_default();
     
-    // Filter apps in selected category with fuzzy matching
+    // Filter apps based on category
     let query = &app.search_query;
-    let mut apps_with_scores: Vec<(String, i64)> = app.apps
-        .iter()
-        .filter(|a| a.category == selected_category_name)
-        .filter_map(|a| {
-            app.matches_search(&a.name, query).map(|score| (a.name.clone(), score))
-        })
-        .collect();
-    
-    // Sort by fuzzy match score (higher is better)
-    if !app.search_query.is_empty() {
-        apps_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
-    }
-    
-    let apps_to_show: Vec<String> = apps_with_scores.into_iter().map(|(name, _)| name).collect();
+    let apps_to_show: Vec<String> = if selected_category_name == "Recent" {
+        // Show recent apps with fuzzy matching
+        let mut apps_with_scores: Vec<(String, i64)> = app.recent_apps
+            .iter()
+            .filter_map(|name| {
+                app.matches_search(name, query).map(|score| (name.clone(), score))
+            })
+            .collect();
+        
+        // Sort by fuzzy match score if searching
+        if !app.search_query.is_empty() {
+            apps_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
+        }
+        
+        apps_with_scores.into_iter().map(|(name, _)| name).collect()
+    } else {
+        // Show apps in selected category with fuzzy matching
+        let mut apps_with_scores: Vec<(String, i64)> = app.apps
+            .iter()
+            .filter(|a| a.category == selected_category_name)
+            .filter_map(|a| {
+                app.matches_search(&a.name, query).map(|score| (a.name.clone(), score))
+            })
+            .collect();
+        
+        // Sort by fuzzy match score (higher is better)
+        if !app.search_query.is_empty() {
+            apps_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
+        }
+        
+        apps_with_scores.into_iter().map(|(name, _)| name).collect()
+    };
     
     // Clamp selected app index
     if !apps_to_show.is_empty() && app.selected_app >= apps_to_show.len() {
         app.selected_app = apps_to_show.len() - 1;
     }
     
-    // --- Categories list ---
+    // --- Categories list (with Recent at the top) ---
     let category_names: Vec<String> = app.categories
         .iter()
         .map(|c| format!("{}  {}", crate::icons::category_icon(c), c))
@@ -58,7 +76,7 @@ pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, confi
     layout::render_list(
         f,
         categories_area,
-        "Categories",
+        " Categories ",
         &category_names,
         app.selected_category,
         app.focus == Focus::Categories,
@@ -71,7 +89,7 @@ pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, confi
     layout::render_list(
         f,
         apps_area,
-        "Apps",
+        " Apps ",
         &apps_to_show,
         selected_index_in_apps,
         app.focus == Focus::Apps,
