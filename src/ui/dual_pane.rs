@@ -37,11 +37,25 @@ pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, confi
     }
 
     // Filter apps to display based on category (dual-pane)
-    let mut apps_to_show: Vec<(AppEntry, i64)> = app.apps
-        .iter()
-        .filter(|a| a.category == selected_category_name)
-        .filter_map(|a| app.matches_search(&a.name, &query_lower).map(|score| (a.clone(), score)))
-        .collect();
+    let mut apps_to_show: Vec<(AppEntry, i64)> = if selected_category_name == "Recent" {
+        // For Recent category, show recent apps that exist in the apps list
+        app.recent_apps
+            .iter()
+            .filter_map(|recent_name| {
+                app.apps.iter()
+                    .find(|a| &a.name == recent_name)
+                    .cloned()
+            })
+            .filter_map(|a| app.matches_search(&a.name, &query_lower).map(|score| (a, score)))
+            .collect()
+    } else {
+        // For other categories, filter by category
+        app.apps
+            .iter()
+            .filter(|a| a.category == selected_category_name)
+            .filter_map(|a| app.matches_search(&a.name, &query_lower).map(|score| (a.clone(), score)))
+            .collect()
+    };
 
     // Sort by fuzzy score
     apps_to_show.sort_by(|a, b| b.1.cmp(&a.1));
