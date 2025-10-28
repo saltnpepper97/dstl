@@ -9,7 +9,7 @@ pub fn category_icon(category: &str) -> &'static str {
         "Audio/Video" => fa::FA_MUSIC,
         "Graphics" => fa::FA_PAINTBRUSH,
         "System" => fa::FA_DESKTOP,
-        "Office" => md::MD_FILE_DOCUMENT,
+        "Office" => fa::FA_BOOK,
         "Games" => fa::FA_GAMEPAD,
         "Education" => fa::FA_GRADUATION_CAP,
         "Settings" => fa::FA_SLIDERS,
