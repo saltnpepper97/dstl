@@ -96,12 +96,18 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
                             }
                         }
                         Focus::Categories => {
-                            if app.selected_category > 0 && app.search_query.is_empty() {
-                                // normal move up
-                                app.selected_category -= 1;
-                                app.selected_app = 0;
-                            } else {
-                                // move to search bar if at top or search is active
+                            // Get previous matching category
+                            let matching_categories = get_matching_category_indices(app);
+                            if let Some(current_pos) = matching_categories.iter().position(|&idx| idx == app.selected_category) {
+                                if current_pos > 0 {
+                                    // Move to previous matching category
+                                    app.selected_category = matching_categories[current_pos - 1];
+                                    app.selected_app = 0;
+                                } else if app.config.search_position == SearchPosition::Top {
+                                    // At first matching category, go to search
+                                    app.focus = Focus::Search;
+                                }
+                            } else if app.config.search_position == SearchPosition::Top {
                                 app.focus = Focus::Search;
                             }
                         }
@@ -143,12 +149,18 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
                             }
                         }
                         Focus::Categories => {
-                            if app.selected_category + 1 < app.categories.len() {
-                                // Normal move down between categories
-                                app.selected_category += 1;
-                                app.selected_app = 0;
+                            // Get next matching category
+                            let matching_categories = get_matching_category_indices(app);
+                            if let Some(current_pos) = matching_categories.iter().position(|&idx| idx == app.selected_category) {
+                                if current_pos + 1 < matching_categories.len() {
+                                    // Move to next matching category
+                                    app.selected_category = matching_categories[current_pos + 1];
+                                    app.selected_app = 0;
+                                } else if app.config.search_position == SearchPosition::Bottom {
+                                    // Last matching category → go to search bar
+                                    app.focus = Focus::Search;
+                                }
                             } else if app.config.search_position == SearchPosition::Bottom {
-                                // Last category → go to search bar
                                 app.focus = Focus::Search;
                             }
                         }
@@ -181,9 +193,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
                     }
                 }
                 Focus::Categories => {
-                    if app.selected_category > 0 {
-                        app.selected_category -= 1;
-                        app.selected_app = 0;
+                    // Get previous matching category
+                    let matching_categories = get_matching_category_indices(app);
+                    if let Some(current_pos) = matching_categories.iter().position(|&idx| idx == app.selected_category) {
+                        if current_pos > 0 {
+                            app.selected_category = matching_categories[current_pos - 1];
+                            app.selected_app = 0;
+                        }
                     }
                 }
                 _ => {}
@@ -197,10 +213,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
                         // Move between categories and apps
                         app.focus = Focus::Apps;
                     } else {
-                        // Navigate down in categories
-                        if app.selected_category + 1 < app.categories.len() {
-                            app.selected_category += 1;
-                            app.selected_app = 0;
+                        // Get next matching category
+                        let matching_categories = get_matching_category_indices(app);
+                        if let Some(current_pos) = matching_categories.iter().position(|&idx| idx == app.selected_category) {
+                            if current_pos + 1 < matching_categories.len() {
+                                app.selected_category = matching_categories[current_pos + 1];
+                                app.selected_app = 0;
+                            }
                         }
                     }
                 }
@@ -221,6 +240,36 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
     Ok(false)
 }
 
+/// Get indices of categories that have matching apps (or all if no search)
+fn get_matching_category_indices(app: &App) -> Vec<usize> {
+    if app.search_query.is_empty() {
+        // No search: return all category indices
+        (0..app.categories.len()).collect()
+    } else {
+        // Search active: return only categories with matches
+        let query_lower = app.search_query.to_lowercase();
+        app.categories
+            .iter()
+            .enumerate()
+            .filter(|(_, cat_name)| {
+                if *cat_name == "Recent" {
+                    app.recent_apps.iter().any(|recent_name| {
+                        app.apps.iter()
+                            .find(|a| &a.name == recent_name)
+                            .and_then(|a| app.matches_search(&a.name, &query_lower))
+                            .is_some()
+                    })
+                } else {
+                    app.apps.iter().any(|a| {
+                        &a.category == *cat_name && app.matches_search(&a.name, &query_lower).is_some()
+                    })
+                }
+            })
+            .map(|(idx, _)| idx)
+            .collect()
+    }
+}
+
 /// Updates selected app and category when search query changes
 fn update_selection_after_search(app: &mut App) {
     if app.search_query.is_empty() {
@@ -231,26 +280,11 @@ fn update_selection_after_search(app: &mut App) {
 
     match app.mode {
         Mode::DualPane => {
-            // find first matching app across all categories
-            for (cat_idx, cat_name) in app.categories.iter().enumerate() {
-                let has_match = if cat_name == "Recent" {
-                    app.recent_apps.iter()
-                        .any(|recent_name| {
-                            app.apps.iter()
-                                .find(|a| &a.name == recent_name)
-                                .and_then(|a| app.matches_search(&a.name, &app.search_query))
-                                .is_some()
-                        })
-                } else {
-                    app.apps.iter()
-                        .any(|a| &a.category == cat_name && app.matches_search(&a.name, &app.search_query).is_some())
-                };
-
-                if has_match {
-                    app.selected_category = cat_idx;
-                    app.selected_app = 0;
-                    return;
-                }
+            // Find first matching category
+            let matching_indices = get_matching_category_indices(app);
+            if let Some(&first_match) = matching_indices.first() {
+                app.selected_category = first_match;
+                app.selected_app = 0;
             }
         }
         Mode::SinglePane => { app.selected_app = 0; }
