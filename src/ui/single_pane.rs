@@ -6,23 +6,21 @@ use ratatui::Frame;
 pub fn draw(
     f: &mut Frame,
     app: &App,
-    _search_query: &str,   // ignore external query; use app.search_query
-    _apps: &[String],      // ignore external apps; use app.visible_apps()
+    _search_query: &str,
+    _apps: &[String],
     selected: usize,
     focus: Focus,
     search_position: SearchPosition,
     config: &LauncherConfig,
 ) {
     let chunks = layout::vertical_split(f, 3, search_position);
-
-    // Get apps to display based on recent_first and fuzzy search
+    
     let filtered_apps: Vec<String> = app
         .visible_apps()
         .into_iter()
         .map(|a| a.name.clone())
         .collect();
-
-    // Draw apps list
+    
     layout::render_list(
         f,
         chunks.1,
@@ -32,12 +30,13 @@ pub fn draw(
         focus == Focus::Apps,
         config,
     );
-
-    // Draw search bar
+    
+    // Pass cursor_position to render_search_bar
     layout::render_search_bar(
         f,
         chunks.0,
         &app.search_query,
+        app.cursor_position,
         focus,
         config,
     );

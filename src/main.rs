@@ -6,64 +6,64 @@ mod launch;
 mod ui;
 
 use ratatui::{
-    backend::CrosstermBackend,
+    backend::{Backend, CrosstermBackend},
     Terminal,
 };
-use std::{io, time::{Duration, Instant}};
+use std::{
+    io::{self, Write},
+    time::{Duration, Instant},
+};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture},
+    cursor::{MoveTo, SetCursorStyle},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    ExecutableCommand,
 };
 use eyre::Result;
-use app::{App, SinglePaneMode, Mode, Focus};
-use config::{load_launcher_config, StartMode};
+
+use app::{App, Focus, Mode, SinglePaneMode};
+use config::{load_launcher_config, CursorShape, SearchPosition};
 
 fn main() -> Result<()> {
-    // Enable colorized error reporting
     color_eyre::install()?;
-    
+
     let cfg = load_launcher_config();
-    
+
     let single_pane_mode = if cfg.dmenu {
         SinglePaneMode::Dmenu
     } else {
         SinglePaneMode::DesktopApps
     };
-    
+
     let start_mode = match cfg.start_mode {
-        StartMode::Dual => Mode::DualPane,
-        StartMode::Single => Mode::SinglePane,
+        config::StartMode::Dual => Mode::DualPane,
+        config::StartMode::Single => Mode::SinglePane,
     };
-    
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
+    
+    // Set cursor color using ANSI escape codes
+    set_cursor_color(&mut stdout, &cfg.colors.cursor_color)?;
+    
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    
+
     let mut app = App::new(single_pane_mode, start_mode, &cfg);
+
     warmup_icons(&mut terminal, &app, &cfg)?;
 
-    // --- First-frame warmup for category icons ---
-    if !app.categories.is_empty() {
-        let old_mode = app.mode;
+    if start_mode == Mode::DualPane && !app.categories.is_empty() {
         let old_focus = app.focus;
-
-        app.mode = Mode::DualPane;
         app.focus = Focus::Categories;
-
         terminal.draw(|f| ui::draw(f, &mut app, cfg.search_position.clone(), &cfg))?;
-
-        app.mode = old_mode;
         app.focus = old_focus;
     }
 
-    // Main loop
-    let res = run_app(&mut terminal, &mut app, &cfg.search_position, &cfg);
-    
-    // Restore terminal
+    let res = run_app(&mut terminal, &mut app, &cfg);
+
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -72,66 +72,167 @@ fn main() -> Result<()> {
     )?;
     terminal.show_cursor()?;
     
+    // Reset cursor color to default
+    reset_cursor_color(terminal.backend_mut())?;
+
     if let Err(err) = res {
-        eprintln!("Error: {:?}", err);
+        eprintln!("Error: {err:?}");
     }
-    
-    // Launch selected app (if any)
-    if let Some(ref command) = app.app_to_launch {
-        if let Some(entry) = app.apps.iter().find(|a| &a.exec == command).cloned() {
-            // Add to recent before launching
+
+    if let Some(ref cmd) = app.app_to_launch {
+        if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd).cloned() {
             app.add_to_recent(entry.name.clone());
             crate::launch::launch_app(&entry, &app.config);
         } else {
-            // Fallback: run directly (not tracked in recent)
-            use std::process::Command;
-            let _ = Command::new("sh").arg("-c").arg(command.clone()).spawn();
+            let _ = std::process::Command::new("sh").arg("-c").arg(cmd).spawn();
         }
     }
 
     Ok(())
 }
 
-fn run_app<B: ratatui::backend::Backend>(
+/// Set the cursor color using ANSI escape codes
+fn set_cursor_color<W: Write>(writer: &mut W, color_hex: &str) -> Result<()> {
+    if let Some((r, g, b)) = parse_hex_color(color_hex) {
+        // OSC 12 ; color ST - Set cursor color
+        write!(writer, "\x1b]12;rgb:{:02x}/{:02x}/{:02x}\x07", r, g, b)?;
+        writer.flush()?;
+    }
+    Ok(())
+}
+
+/// Reset cursor color to terminal default
+fn reset_cursor_color<W: Write>(writer: &mut W) -> Result<()> {
+    // OSC 112 ST - Reset cursor color
+    write!(writer, "\x1b]112\x07")?;
+    writer.flush()?;
+    Ok(())
+}
+
+/// Parse hex color string to RGB values
+fn parse_hex_color(color: &str) -> Option<(u8, u8, u8)> {
+    let color = color.trim();
+    
+    if !color.starts_with('#') {
+        return None;
+    }
+    
+    let hex = &color[1..];
+    
+    match hex.len() {
+        // #RGB format
+        3 => {
+            let r = u8::from_str_radix(&hex[0..1], 16).ok()?;
+            let g = u8::from_str_radix(&hex[1..2], 16).ok()?;
+            let b = u8::from_str_radix(&hex[2..3], 16).ok()?;
+            Some((r * 17, g * 17, b * 17))
+        }
+        // #RRGGBB format
+        6 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            Some((r, g, b))
+        }
+        // #RRGGBBAA format (ignore alpha)
+        8 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            Some((r, g, b))
+        }
+        _ => None,
+    }
+}
+
+fn run_app<B: Backend + ExecutableCommand>(
     terminal: &mut Terminal<B>,
     app: &mut App,
-    search_position: &config::SearchPosition,
     cfg: &config::LauncherConfig,
 ) -> Result<()> {
     let mut last_input = Instant::now();
 
     loop {
-        // Always draw current state
-        terminal.draw(|f| ui::draw(f, app, search_position.clone(), cfg))?;
+        app.update_cursor_blink();
 
-        // Calculate remaining time until timeout
-        let poll_duration = if cfg.timeout > 0 {
-            let elapsed = last_input.elapsed().as_secs();
-            if elapsed >= cfg.timeout {
-                break; // Timeout reached
+        terminal.draw(|f| ui::draw(f, app, cfg.search_position.clone(), cfg))?;
+
+        if app.focus == Focus::Search {
+            let frame = terminal.get_frame();
+            let full_area = frame.area();
+
+            let search_area = match cfg.search_position {
+                SearchPosition::Top => ratatui::layout::Rect::new(full_area.x, full_area.y, full_area.width, 3),
+                SearchPosition::Bottom => ratatui::layout::Rect::new(
+                    full_area.x,
+                    full_area.height.saturating_sub(3),
+                    full_area.width,
+                    3,
+                ),
+            };
+
+            // Calculate scroll offset to match the Paragraph widget
+            let available_width = search_area.width.saturating_sub(4) as usize;
+            let horizontal_offset = if app.cursor_position > available_width {
+                app.cursor_position - available_width
+            } else {
+                0
+            };
+            let visible_cursor_pos = app.cursor_position - horizontal_offset;
+            let cursor_x = search_area.x + 2 + visible_cursor_pos as u16;
+            let cursor_y = search_area.y + 1;
+
+            let backend = terminal.backend_mut();
+
+            
+            // Move cursor
+            backend.execute(MoveTo(cursor_x, cursor_y))?;
+
+            // Set shape based on blink interval
+            let style = if cfg.colors.cursor_blink_interval > 0 {
+                // Use steady cursor - we'll handle blinking manually
+                match cfg.colors.cursor_shape {
+                    CursorShape::Block => SetCursorStyle::SteadyBlock,
+                    CursorShape::Underline => SetCursorStyle::SteadyUnderScore,
+                    CursorShape::Pipe => SetCursorStyle::SteadyBar,
+                }
+            } else {
+                // Use terminal's built-in blinking
+                match cfg.colors.cursor_shape {
+                    CursorShape::Block => SetCursorStyle::BlinkingBlock,
+                    CursorShape::Underline => SetCursorStyle::BlinkingUnderScore,
+                    CursorShape::Pipe => SetCursorStyle::BlinkingBar,
+                }
+            };
+            backend.execute(style)?;
+
+            // Handle manual cursor blinking if interval is set
+            if cfg.colors.cursor_blink_interval > 0 {
+                if app.cursor_visible {
+                    terminal.show_cursor()?;
+                } else {
+                    terminal.hide_cursor()?;
+                }
+            } else {
+                terminal.show_cursor()?;
             }
-            // Poll for the remaining time or 100ms, whichever is shorter
-            let remaining_secs = cfg.timeout - elapsed;
-            Duration::from_millis((remaining_secs * 1000).min(100))
-        } else {
-            // No timeout configured, use default poll interval
-            Duration::from_millis(100)
-        };
 
-        // Poll for events with calculated duration
-        if crossterm::event::poll(poll_duration)? {
-            match event::read()? {
-                event::Event::Key(key) => {
-                    last_input = Instant::now();
-                    if events::handle_key(app, key)? {
-                        break;
-                    }
+        } else {
+            terminal.hide_cursor()?;
+        }
+
+        let tick = Duration::from_millis(50);
+
+        if cfg.timeout > 0 && last_input.elapsed().as_secs() >= cfg.timeout {
+            break;
+        }
+
+        if event::poll(tick)? {
+            if let Event::Key(key) = event::read()? {
+                last_input = Instant::now();
+                if events::handle_key(app, key)? {
+                    break;
                 }
-                event::Event::Resize(_, _) => {
-                    last_input = Instant::now();
-                    warmup_icons(terminal, app, cfg)?;
-                }
-                _ => {}
             }
         }
     }
@@ -139,32 +240,22 @@ fn run_app<B: ratatui::backend::Backend>(
     Ok(())
 }
 
-fn warmup_icons<B: ratatui::backend::Backend>(
-    terminal: &mut ratatui::Terminal<B>,
+fn warmup_icons<B: Backend>(
+    terminal: &mut Terminal<B>,
     app: &App,
     cfg: &config::LauncherConfig,
-) -> eyre::Result<()> {
+) -> Result<()> {
     if app.categories.is_empty() {
         return Ok(());
     }
 
-    let mut warmup_app = app.clone();
+    let mut tmp = app.clone();
+    tmp.focus = Focus::Apps;
+    terminal.draw(|f| ui::draw(f, &mut tmp, cfg.search_position.clone(), cfg))?;
 
-    if warmup_app.mode == Mode::DualPane {
-        let old_focus = warmup_app.focus;
-
-        warmup_app.mode = Mode::SinglePane;
-        warmup_app.focus = Focus::Apps; // Single-pane leftmost focus
-        terminal.draw(|f| ui::draw(f, &mut warmup_app, cfg.search_position.clone(), cfg))?;
-
-        warmup_app.mode = Mode::DualPane;
-        warmup_app.focus = Focus::Categories;
-        terminal.draw(|f| ui::draw(f, &mut warmup_app, cfg.search_position.clone(), cfg))?;
-
-        warmup_app.focus = old_focus;
-    } else {
-        warmup_app.focus = Focus::Apps;
-        terminal.draw(|f| ui::draw(f, &mut warmup_app, cfg.search_position.clone(), cfg))?;
+    if app.mode == Mode::DualPane {
+        tmp.focus = Focus::Categories;
+        terminal.draw(|f| ui::draw(f, &mut tmp, cfg.search_position.clone(), cfg))?;
     }
 
     Ok(())

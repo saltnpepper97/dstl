@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::time::Instant;
 use crate::config::LauncherConfig;
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
@@ -28,6 +29,9 @@ pub struct App {
     pub single_pane_mode: SinglePaneMode,
     pub should_quit: bool,
     pub search_query: String,
+    pub cursor_position: usize,
+    pub cursor_visible: bool,
+    pub cursor_last_toggle: std::time::Instant,
     pub categories: Vec<String>,
     pub apps: Vec<AppEntry>,
     pub recent_apps: Vec<String>,
@@ -46,6 +50,9 @@ impl Clone for App {
             single_pane_mode: self.single_pane_mode,
             should_quit: self.should_quit,
             search_query: self.search_query.clone(),
+            cursor_position: self.cursor_position,
+            cursor_visible: true,
+            cursor_last_toggle: Instant::now(),
             categories: self.categories.clone(),
             apps: self.apps.clone(),
             recent_apps: self.recent_apps.clone(),
@@ -66,6 +73,9 @@ impl std::fmt::Debug for App {
             .field("single_pane_mode", &self.single_pane_mode)
             .field("should_quit", &self.should_quit)
             .field("search_query", &self.search_query)
+            .field("cursor_position", &self.cursor_position)
+            .field("cursor_visible", &self.cursor_visible)
+            .field("cursor_last_toggle", &self.cursor_last_toggle)
             .field("categories", &self.categories)
             .field("apps", &self.apps)
             .field("recent_apps", &self.recent_apps)
@@ -118,6 +128,9 @@ impl App {
             single_pane_mode,
             should_quit: false,
             search_query: String::new(),
+            cursor_position: 0,
+            cursor_visible: true,
+            cursor_last_toggle: Instant::now(),
             categories,
             apps,
             recent_apps: Vec::new(),
@@ -221,6 +234,30 @@ impl App {
         }
 
         apps
+    }
+
+    pub fn update_cursor_blink(&mut self) {
+        use std::time::Duration;
+
+        // Get the blink interval from config
+        let blink_interval = self.config.colors.cursor_blink_interval;
+        
+        // If interval is 0, cursor should always be visible (no blinking)
+        if blink_interval == 0 {
+            self.cursor_visible = true;
+            return;
+        }
+
+        // Check if it's time to toggle
+        if self.cursor_last_toggle.elapsed() >= Duration::from_millis(blink_interval) {
+            self.cursor_visible = !self.cursor_visible;
+            self.cursor_last_toggle = std::time::Instant::now();
+        }
+    }
+
+    pub fn reset_cursor_blink(&mut self) {
+        self.cursor_visible = true;
+        self.cursor_last_toggle = std::time::Instant::now();
     }
 
     /// Toggle between SinglePane and DualPane
