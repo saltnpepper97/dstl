@@ -1,40 +1,44 @@
 @author "Dustin Pilgrim"
 @Description "Dustin's simple TUI launcher"
 
+# You can import external theme files using the gather keyword:
+# gather "~/.config/themes/catppuccin.rune" as theme
+# gather "./my-theme.rune"
+# The theme loader will automatically detect and use imported theme settings
+
 launcher:
     # Whether to use dmenu-style fuzzy search mode
     dmenu = false
-
     # Where the search bar appears (options: "top" or "bottom")
     search_position = "top"
-
     # Startup mode (options: "single" or "dual")
     startup_mode = "single"
-
     # Automatically refocus search field when switching modes
     focus_search_on_switch = true
-
     # Terminal emulator to launch apps that need a terminal
     terminal = "alacritty"
-
-    # Close the process after configured timeout
+    # Close the process after configured timeout (in seconds)
     timeout 25
-
+    # Maximum number of recent apps to track
+    max_recent_apps = 15
+    # Show recent apps first in the list
+    recent_first = false
     theme:
-        # Border color of panels
-        border = "white"
-
-        # Highlight color for focused elements
-        focus = "yellow"
-
-        # Color used when highlighting matched entries
-        highlight = "blue"
-
+        # Border color of panels (hex format: #RRGGBB)
+        border = "#ffffff"
+        # Highlight color for focused elements (hex format: #RRGGBB)
+        focus = "#ffff00"
+        # Color used when highlighting matched entries (hex format: #RRGGBB)
+        highlight = "#0000ff"
         # Border style ("plain", "rounded", "thick", "double")
         border_style = "plain"
-
-        # Highlight type ("background" or "text")
+        # Highlight type ("background" or "foreground")
         highlight_type = "background"
+        # Cursor color in search field (hex format: #RRGGBB)
+        cursor_color = "#ffff00"
+        # Cursor shape ("block", "underline", "pipe")
+        cursor_shape = "block"
+        # Cursor blink interval in milliseconds (0 = no blink)
+        cursor_blink_interval = 0
     end
 end
-

@@ -35,7 +35,6 @@ pub fn horizontal_split(area: Rect) -> (Rect, Rect) {
     (chunks[0], chunks[1])
 }
 
-
 pub fn render_search_bar(
     f: &mut Frame,
     area: Rect,
@@ -49,64 +48,39 @@ pub fn render_search_bar(
     } else {
         LauncherTheme::parse_color(&config.colors.border)
     };
-    
-    let text_color = border_color;
-    
+
     let block = Block::default()
         .title(" Search ")
         .borders(Borders::ALL)
         .border_type(LauncherTheme::parse_border_type(&config.colors.border_style))
         .border_style(Style::default().fg(border_color));
-    
-    // Calculate horizontal scroll offset based on cursor position
-    let available_width = area.width.saturating_sub(4) as usize; // 2 for borders, 2 for padding
+
+    // usable inner width (subtract borders)
+    let available_width = area.width.saturating_sub(2) as usize;
+
     let query_chars: Vec<char> = query.chars().collect();
     let query_len = query_chars.len();
-    
-    let horizontal_offset = if cursor_position > available_width {
-        cursor_position - available_width
+
+    // simple horizontal scroll
+    let horizontal_offset = if cursor_position >= available_width {
+        cursor_position - available_width + 1
     } else {
         0
     };
-    
-    // Determine if we need ellipsis
-    let show_left_ellipsis = horizontal_offset > 0;
-    let total_remaining = query_len - horizontal_offset;
-    let show_right_ellipsis = total_remaining > available_width;
-    
-    // Calculate actual text window (accounting for ellipsis)
-    let text_width = if show_left_ellipsis && show_right_ellipsis {
-        available_width.saturating_sub(2) // Both ellipsis
-    } else if show_left_ellipsis || show_right_ellipsis {
-        available_width.saturating_sub(1) // One ellipsis
-    } else {
-        available_width
-    };
-    
-    // Extract visible portion
-    let visible_start = horizontal_offset;
-    let visible_end = (visible_start + text_width).min(query_len);
-    let visible_text: String = query_chars[visible_start..visible_end].iter().collect();
-    
-    // Build display text with ellipsis
-    let mut display_text = String::from(" ");
-    if show_left_ellipsis {
-        display_text.push('…');
-    }
-    display_text.push_str(&visible_text);
-    if show_right_ellipsis {
-        display_text.push('…');
-    }
-    display_text.push(' ');
-    
-    let paragraph = Paragraph::new(display_text)
-        .block(block.clone())
-        .style(Style::default().fg(text_color));
-    
-    f.render_widget(paragraph, area);
-    // Note: cursor position is set in main.rs run_app() function
-}
 
+    let visible_start = horizontal_offset;
+    let visible_end = (visible_start + available_width).min(query_len);
+
+    let visible_text: String = query_chars[visible_start..visible_end]
+        .iter()
+        .collect();
+
+    let paragraph = Paragraph::new(visible_text)
+        .block(block)
+        .style(Style::default().fg(border_color));
+
+    f.render_widget(paragraph, area);
+}
 
 pub fn render_list(
     f: &mut Frame,
