@@ -55,13 +55,13 @@ pub fn render_search_bar(
         .border_type(LauncherTheme::parse_border_type(&config.colors.border_style))
         .border_style(Style::default().fg(border_color));
 
-    // usable inner width (subtract borders)
-    let available_width = area.width.saturating_sub(2) as usize;
+    // usable width AFTER subtracting borders and padding
+    let padding = 2; // 1 left + 1 right
+    let available_width = area.width.saturating_sub(2 + padding) as usize;
 
     let query_chars: Vec<char> = query.chars().collect();
     let query_len = query_chars.len();
 
-    // simple horizontal scroll
     let horizontal_offset = if cursor_position >= available_width {
         cursor_position - available_width + 1
     } else {
@@ -70,12 +70,15 @@ pub fn render_search_bar(
 
     let visible_start = horizontal_offset;
     let visible_end = (visible_start + available_width).min(query_len);
+    let visible_text: String = query_chars[visible_start..visible_end].iter().collect();
 
-    let visible_text: String = query_chars[visible_start..visible_end]
-        .iter()
-        .collect();
+    // ← padding added here
+    let mut final_text = String::new();
+    final_text.push(' ');                // left pad
+    final_text.push_str(&visible_text);  // actual text
+    final_text.push(' ');                // right pad
 
-    let paragraph = Paragraph::new(visible_text)
+    let paragraph = Paragraph::new(final_text)
         .block(block)
         .style(Style::default().fg(border_color));
 

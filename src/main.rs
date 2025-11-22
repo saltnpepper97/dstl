@@ -172,7 +172,10 @@ fn run_app<B: Backend + ExecutableCommand>(
             };
 
             // Calculate scroll offset to match the Paragraph widget
-            let available_width = search_area.width.saturating_sub(2) as usize;
+            let padding_left = 1;
+
+            let available_width = search_area.width.saturating_sub(2 + 2) as usize; 
+            // borders + 2 padding
 
             let horizontal_offset = if app.cursor_position >= available_width {
                 app.cursor_position - available_width + 1
@@ -182,10 +185,8 @@ fn run_app<B: Backend + ExecutableCommand>(
 
             let visible_cursor_pos = app.cursor_position - horizontal_offset;
 
-            // +1 to skip left border of the block
-            let cursor_x = search_area.x + 1 + visible_cursor_pos as u16;
-
-            // vertically centered
+            // cursor_x = left border + padding_left + local_pos
+            let cursor_x = search_area.x + 1 + padding_left + visible_cursor_pos as u16;
             let cursor_y = search_area.y + 1;
 
             let backend = terminal.backend_mut();
