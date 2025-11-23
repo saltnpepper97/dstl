@@ -33,11 +33,26 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
         }
 
         // Left/Right arrow keys for cursor movement in search
+        Left if app.focus == Focus::Search => {
+            if app.cursor_position > 0 {
+                app.cursor_position -= 1;
+                app.reset_cursor_blink(); // Keep cursor solid while moving
+            }
+        }
+
         Left if app.focus != Focus::Search => {
             if app.mode == Mode::DualPane {
                 if app.focus == Focus::Apps {
                     app.focus = Focus::Categories;
                 }
+            }
+        }
+
+        Right if app.focus == Focus::Search => {
+            let query_len = app.search_query.chars().count();
+            if app.cursor_position < query_len {
+                app.cursor_position += 1;
+                app.reset_cursor_blink(); // Keep cursor solid while moving
             }
         }
 

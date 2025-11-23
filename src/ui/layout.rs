@@ -55,35 +55,44 @@ pub fn render_search_bar(
         .border_type(LauncherTheme::parse_border_type(&config.colors.border_style))
         .border_style(Style::default().fg(border_color));
 
-    // usable width AFTER subtracting borders and padding
-    let padding = 2; // 1 left + 1 right
-    let available_width = area.width.saturating_sub(2 + padding) as usize;
-
+    // Inner area after borders
+    let inner = block.inner(area);
+    
     let query_chars: Vec<char> = query.chars().collect();
     let query_len = query_chars.len();
-
-    let horizontal_offset = if cursor_position >= available_width {
+    
+    // Add padding (1 space on each side)
+    let padding = 1;
+    let available_width = (inner.width as usize).saturating_sub(padding * 2);
+    
+    // Calculate scrolling offset to keep cursor visible
+    let scroll_offset = if cursor_position >= available_width {
         cursor_position - available_width + 1
     } else {
         0
     };
-
-    let visible_start = horizontal_offset;
+    
+    let visible_start = scroll_offset;
     let visible_end = (visible_start + available_width).min(query_len);
     let visible_text: String = query_chars[visible_start..visible_end].iter().collect();
-
-    // ← padding added here
-    let mut final_text = String::new();
-    final_text.push(' ');                // left pad
-    final_text.push_str(&visible_text);  // actual text
-    final_text.push(' ');                // right pad
-
-    let paragraph = Paragraph::new(final_text)
+    
+    // Add padding spaces to the displayed text
+    let padded_text = format!(" {} ", visible_text);
+    
+    let paragraph = Paragraph::new(padded_text)
         .block(block)
         .style(Style::default().fg(border_color));
-
+    
     f.render_widget(paragraph, area);
+    
+    // Set cursor position if search is focused (account for padding)
+    if focus == Focus::Search {
+        let cursor_x = inner.x + padding as u16 + (cursor_position - scroll_offset) as u16;
+        let cursor_y = inner.y;
+        f.set_cursor_position((cursor_x, cursor_y));
+    }
 }
+
 
 pub fn render_list(
     f: &mut Frame,
