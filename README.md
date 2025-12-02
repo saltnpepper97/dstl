@@ -29,7 +29,7 @@ yay -s dstl
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/dstl
+git clone https://github.com/saltnpepper97/dstl
 cd dstl
 cargo build --release
 sudo cp target/release/dstl /usr/local/bin/
@@ -44,7 +44,7 @@ dstl looks for configuration in the following locations (in order):
 ### Basic Configuration Example
 
 ```rune
-launcher {
+launcher:
     # Display mode
     dmenu = false
     startup_mode = "dual"  # or "single"
@@ -59,7 +59,7 @@ launcher {
     recent_first = false
     
     # Theme configuration
-    theme {
+    theme:
         border = "#ffffff"
         focus = "#00ff00"
         highlight = "#0000ff"
@@ -68,8 +68,8 @@ launcher {
         cursor_blink_interval = 500  # milliseconds, 0 to disable
         border_style = "rounded"  # "plain", "rounded", "thick", "double"
         highlight_type = "background"  # or "foreground"
-    }
-}
+    end
+end
 ```
 
 ### Theme System with Gather
@@ -80,10 +80,10 @@ dstl supports importing themes using the `gather` statement:
 # Import a theme file
 gather "~/.config/dstl/themes/dracula.rune" as theme
 
-launcher {
+launcher:
     terminal = "alacritty"
     # Theme colors will be loaded from the gathered file
-}
+end
 ```
 
 **Theme Priority:**
