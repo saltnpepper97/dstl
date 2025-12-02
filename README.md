@@ -14,6 +14,18 @@
 
 ## Installation
 
+### AUR
+
+```sh
+paru -s dstl
+```
+
+or
+
+```sh
+yay -s dstl
+```
+
 ### From Source
 
 ```bash
