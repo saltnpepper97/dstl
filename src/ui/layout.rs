@@ -5,7 +5,7 @@ use ratatui::{
     style::{Style, Color},
 };
 use crate::app::Focus;
-use crate::config::{LauncherConfig, LauncherTheme, SearchPosition};
+use crate::config::{DstlConfig, LauncherTheme, SearchPosition};
 
 pub fn vertical_split(f: &Frame, search_height: u16, search_position: SearchPosition) -> (Rect, Rect) {
     let full_area = f.area();
@@ -41,7 +41,7 @@ pub fn render_search_bar(
     query: &str,
     cursor_position: usize,
     focus: Focus,
-    config: &LauncherConfig,
+    config: &DstlConfig,
 ) {
     let border_color = if focus == Focus::Search {
         LauncherTheme::parse_color(&config.colors.focus)
@@ -101,7 +101,7 @@ pub fn render_list(
     items: &[String],
     selected: usize,
     focus_on_title: bool,
-    config: &LauncherConfig,
+    config: &DstlConfig,
 ) {
     let mut state = ListState::default();
     let sel = if selected >= items.len() { 0 } else { selected };

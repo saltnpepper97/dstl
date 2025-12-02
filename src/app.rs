@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
-use crate::config::LauncherConfig;
+use crate::config::DstlConfig;
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 
@@ -39,7 +39,7 @@ pub struct App {
     pub selected_app: usize,
     pub focus: Focus,
     pub app_to_launch: Option<String>,
-    pub config: LauncherConfig,
+    pub config: DstlConfig,
     fuzzy_matcher: SkimMatcherV2,
 }
 
@@ -111,7 +111,7 @@ impl AppEntry {
 
 impl App {
     /// Initialize the app with specified single pane mode and start mode
-    pub fn new(single_pane_mode: SinglePaneMode, start_mode: Mode, config: &LauncherConfig) -> Self {
+    pub fn new(single_pane_mode: SinglePaneMode, start_mode: Mode, config: &DstlConfig) -> Self {
         let (categories, apps, mode, focus) = match start_mode {
             Mode::SinglePane => {
                 let (cats, apps) = Self::load_for_mode(single_pane_mode);

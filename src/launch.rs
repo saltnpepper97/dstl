@@ -1,9 +1,9 @@
 use std::process::{Command, Stdio};
 use std::os::unix::process::CommandExt;
 use crate::app::AppEntry;
-use crate::config::LauncherConfig;
+use crate::config::DstlConfig;
 
-pub fn launch_app(entry: &AppEntry, config: &LauncherConfig) {
+pub fn launch_app(entry: &AppEntry, config: &DstlConfig) {
     let terminal = &config.terminal;
 
     let mut cmd = if entry.terminal || entry.needs_terminal() {

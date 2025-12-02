@@ -44,7 +44,7 @@ dstl looks for configuration in the following locations (in order):
 ### Basic Configuration Example
 
 ```rune
-launcher:
+dstl:
     # Display mode
     dmenu = false
     startup_mode = "dual"  # or "single"
@@ -80,9 +80,15 @@ dstl supports importing themes using the `gather` statement:
 # Import a theme file
 gather "~/.config/dstl/themes/dracula.rune" as theme
 
-launcher:
+dstl:
     terminal = "alacritty"
     # Theme colors will be loaded from the gathered file
+    theme:
+      cursor_shape = "block"
+      cursor_blink_interval = 500
+      border_style = "plain"
+      highlight_type = "background"
+    end
 end
 ```
 
@@ -97,18 +103,19 @@ end
 Colors support multiple hex formats:
 - `#RGB` - 3-digit hex (e.g., `#fff`)
 - `#RRGGBB` - 6-digit hex (e.g., `#ffffff`)
-- `#RRGGBBAA` - 8-digit hex with alpha (alpha ignored)
 
 ## Usage
 
 ### Launching
 
 ```bash
-# Start in default mode (from config)
-dstl
-
 # Launch directly
 dstl
+```
+
+# Launch from config (hyprland example)
+```
+bind = $mainMod, R, exec, kitty --class dstl -e dstl
 ```
 
 ### Keyboard Shortcuts

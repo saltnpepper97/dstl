@@ -38,7 +38,7 @@ pub struct LauncherTheme {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LauncherConfig {
+pub struct DstlConfig {
     pub dmenu: bool,
     pub search_position: SearchPosition,
     pub start_mode: StartMode,
@@ -208,19 +208,19 @@ fn load_config_with_gather(path: &Path) -> Result<RuneConfig> {
 }
 
 /// Load config with gather support and theme priority system
-pub fn load_config(path: &str) -> Result<LauncherConfig> {
+pub fn load_config(path: &str) -> Result<DstlConfig> {
     let path_buf = PathBuf::from(path);
     let config = load_config_with_gather(&path_buf)?;
 
     // --- Fetch values with validation ---
-    let dmenu = get_config_or(&config, "launcher.dmenu", false);
-    let terminal = get_config_or(&config, "launcher.terminal", "foot".to_string());
-    let timeout = get_config_or(&config, "launcher.timeout", 0u64);
-    let max_recent_apps: usize = get_config_or(&config, "launcher.max_recent_apps", 15u64) as usize;
-    let recent_first = get_config_or(&config, "launcher.recent_first", false);
+    let dmenu = get_config_or(&config, "dstl.dmenu", false);
+    let terminal = get_config_or(&config, "dstl.terminal", "foot".to_string());
+    let timeout = get_config_or(&config, "dstl.timeout", 0u64);
+    let max_recent_apps: usize = get_config_or(&config, "dstl.max_recent_apps", 15u64) as usize;
+    let recent_first = get_config_or(&config, "dstl.recent_first", false);
 
     // Validate search_position
-    let search_position_str: String = get_config_or(&config, "launcher.search_position", "top".to_string());
+    let search_position_str: String = get_config_or(&config, "dstl.search_position", "top".to_string());
     let search_position = match search_position_str.to_lowercase().as_str() {
         "top" => SearchPosition::Top,
         "bottom" => SearchPosition::Bottom,
@@ -228,7 +228,7 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
     };
 
     // Validate startup_mode
-    let start_mode_str: String = get_config_or(&config, "launcher.startup_mode", "single".to_string());
+    let start_mode_str: String = get_config_or(&config, "dstl.startup_mode", "single".to_string());
     let start_mode = match start_mode_str.to_lowercase().as_str() {
         "single" => StartMode::Single,
         "dual" => StartMode::Dual,
@@ -238,7 +238,7 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
     // Load colors with theme priority system
     let (border_color, focus_color, highlight_color, cursor_color) = load_theme_colors(&config)?;
 
-    let cursor_shape_str: String = get_config_or(&config, "launcher.theme.cursor_shape", "block".to_string());
+    let cursor_shape_str: String = get_config_or(&config, "dstl.theme.cursor_shape", "block".to_string());
     let cursor_shape = match cursor_shape_str.to_lowercase().as_str() {
         "block" => CursorShape::Block,
         "underline" => CursorShape::Underline,
@@ -246,10 +246,10 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
         _ => CursorShape::Block,
     };
 
-    let cursor_blink_interval: u64 = get_config_or(&config, "launcher.theme.cursor_blink_interval", 0u64);
-    let border_style: String = get_config_or(&config, "launcher.theme.border_style", "plain".to_string());
-    let highlight_type: String = get_config_or(&config, "launcher.theme.highlight_type", "background".to_string());
-    let focus_search: bool = get_config_or(&config, "launcher.focus_search_on_switch", true);
+    let cursor_blink_interval: u64 = get_config_or(&config, "dstl.theme.cursor_blink_interval", 0u64);
+    let border_style: String = get_config_or(&config, "dstl.theme.border_style", "plain".to_string());
+    let highlight_type: String = get_config_or(&config, "dstl.theme.highlight_type", "background".to_string());
+    let focus_search: bool = get_config_or(&config, "dstl.focus_search_on_switch", true);
 
     let colors = LauncherTheme {
         border: border_color,
@@ -262,7 +262,7 @@ pub fn load_config(path: &str) -> Result<LauncherConfig> {
         cursor_blink_interval,
     };
 
-    Ok(LauncherConfig {
+    Ok(DstlConfig {
         dmenu,
         search_position,
         start_mode,
@@ -287,12 +287,12 @@ fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, Str
     for alias in aliases {
         if config.has_document(&alias) {
             // Test if this import has theme data
-            let test_path = format!("{}.launcher.theme.border", alias);
+            let test_path = format!("{}.dstl.theme.border", alias);
             if let Ok(val) = config.get::<String>(&test_path) {
                 border = Some(val);
-                focus = config.get::<String>(&format!("{}.launcher.theme.focus", alias)).ok();
-                highlight = config.get::<String>(&format!("{}.launcher.theme.highlight", alias)).ok();
-                cursor = config.get::<String>(&format!("{}.launcher.theme.cursor_color", alias)).ok();
+                focus = config.get::<String>(&format!("{}.dstl.theme.focus", alias)).ok();
+                highlight = config.get::<String>(&format!("{}.dstl.theme.highlight", alias)).ok();
+                cursor = config.get::<String>(&format!("{}.dstl.theme.cursor_color", alias)).ok();
                 break;
             }
         }
@@ -300,18 +300,18 @@ fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, Str
 
     // PRIORITY 2: Check for top-level theme (from non-aliased gather or main config)
     if border.is_none() {
-        border = config.get::<String>("launcher.theme.border").ok();
-        focus = config.get::<String>("launcher.theme.focus").ok();
-        highlight = config.get::<String>("launcher.theme.highlight").ok();
-        cursor = config.get::<String>("launcher.theme.cursor_color").ok();
+        border = config.get::<String>("dstl.theme.border").ok();
+        focus = config.get::<String>("dstl.theme.focus").ok();
+        highlight = config.get::<String>("dstl.theme.highlight").ok();
+        cursor = config.get::<String>("dstl.theme.cursor_color").ok();
     }
 
     // PRIORITY 3: Check for "theme" document
     if border.is_none() && config.has_document("theme") {
-        border = config.get::<String>("theme.launcher.theme.border").ok();
-        focus = config.get::<String>("theme.launcher.theme.focus").ok();
-        highlight = config.get::<String>("theme.launcher.theme.highlight").ok();
-        cursor = config.get::<String>("theme.launcher.theme.cursor_color").ok();
+        border = config.get::<String>("theme.dstl.theme.border").ok();
+        focus = config.get::<String>("theme.dstl.theme.focus").ok();
+        highlight = config.get::<String>("theme.dstl.theme.highlight").ok();
+        cursor = config.get::<String>("theme.dstl.theme.cursor_color").ok();
     }
 
     // Defaults
@@ -324,7 +324,7 @@ fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, Str
 }
 
 /// Top-level config loader that exits gracefully on failure.
-pub fn load_launcher_config() -> LauncherConfig {
+pub fn load_launcher_config() -> DstlConfig {
     let path = find_config().expect("No launcher.rune config found");
     match load_config(&path.to_string_lossy()) {
         Ok(cfg) => cfg,

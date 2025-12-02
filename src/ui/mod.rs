@@ -1,12 +1,12 @@
 use crate::app::{App, Mode};
-use crate::config::{LauncherConfig, SearchPosition};
+use crate::config::{DstlConfig, SearchPosition};
 use ratatui::Frame;
 
 mod layout;
 mod dual_pane;
 mod single_pane;
 
-pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, config: &LauncherConfig) {
+pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, config: &DstlConfig) {
     match app.mode {
         Mode::SinglePane => {
             // Collect app names for single pane

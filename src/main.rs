@@ -148,7 +148,7 @@ fn parse_hex_color(color: &str) -> Option<(u8, u8, u8)> {
 fn run_app<B: Backend + ExecutableCommand>(
     terminal: &mut Terminal<B>,
     app: &mut App,
-    cfg: &config::LauncherConfig,
+    cfg: &config::DstlConfig,
 ) -> Result<()> {
     let mut last_input = Instant::now();
 
@@ -249,7 +249,7 @@ fn run_app<B: Backend + ExecutableCommand>(
 fn warmup_icons<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &App,
-    cfg: &config::LauncherConfig,
+    cfg: &config::DstlConfig,
 ) -> Result<()> {
     if app.categories.is_empty() {
         return Ok(());

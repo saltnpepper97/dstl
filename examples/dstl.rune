@@ -6,7 +6,7 @@
 # gather "./my-theme.rune"
 # The theme loader will automatically detect and use imported theme settings
 
-launcher:
+dstl:
     # Whether to use dmenu-style fuzzy search mode
     dmenu = false
     # Where the search bar appears (options: "top" or "bottom")

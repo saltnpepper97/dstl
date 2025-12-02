@@ -1,6 +1,6 @@
 use crate::ui::layout;
 use crate::app::{App, Focus};
-use crate::config::{LauncherConfig, SearchPosition};
+use crate::config::{DstlConfig, SearchPosition};
 use ratatui::Frame;
 
 pub fn draw(
@@ -11,7 +11,7 @@ pub fn draw(
     selected: usize,
     focus: Focus,
     search_position: SearchPosition,
-    config: &LauncherConfig,
+    config: &DstlConfig,
 ) {
     let chunks = layout::vertical_split(f, 3, search_position);
     
