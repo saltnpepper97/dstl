@@ -698,10 +698,11 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "rune-cfg"
-version = "0.1.33"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "484588de73fce1cabfeb818a9d2c5cebcd3e03e66fcff1df93a051728336da82"
+checksum = "2a9c8d1f7236f80da3feffa532d0fafc88cd8231e2d50e1598149d67dd615228"
 dependencies = [
+ "dirs",
  "indexmap",
  "once_cell",
  "serde",

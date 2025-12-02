@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process;
-use eyre::{Result, eyre};
+use eyre::Result;
 use ratatui::style::Color;
 use ratatui::widgets::BorderType;
 use rune_cfg::{RuneConfig, Value, RuneError};
@@ -134,84 +134,8 @@ where
     default
 }
 
-/// Manually parse and load gather imports since rune_cfg doesn't do this automatically
-fn load_config_with_gather(path: &Path) -> Result<RuneConfig> {
-    use std::fs;
-    use regex::Regex;
-
-    // Read the main config file
-    let content = fs::read_to_string(path)
-        .map_err(|e| eyre!("Failed to read config file: {}", e))?;
-
-    // Parse gather statements manually, but only from non-commented lines
-    // Format: gather "path/to/file.rune" [as alias]
-    let gather_regex = Regex::new(r#"gather\s+"([^"]+)"(?:\s+as\s+(\w+))?"#).unwrap();
-    
-    // Create the main config
-    let mut config = RuneConfig::from_str(&content)
-        .map_err(|e| eyre!("Failed to parse main config: {}", e))?;
-
-    // Process each line to find gather statements (excluding comments)
-    for line in content.lines() {
-        let trimmed = line.trim();
-        
-        // Skip commented lines
-        if trimmed.starts_with('#') {
-            continue;
-        }
-        
-        // Find gather statement in this line
-        if let Some(caps) = gather_regex.captures(line) {
-            let gather_path_str = &caps[1];
-            let alias = caps.get(2).map(|m| m.as_str().to_string());
-
-            // Expand tilde if present
-            let expanded_path = if gather_path_str.starts_with("~/") {
-                dirs::home_dir()
-                    .ok_or_else(|| eyre!("Could not determine home directory"))?
-                    .join(&gather_path_str[2..])
-            } else {
-                // If relative path, make it relative to config directory
-                let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
-                config_dir.join(gather_path_str)
-            };
-
-            // Check if file exists
-            if !expanded_path.exists() {
-                continue;
-            }
-
-            // Load the gathered file
-            let gather_content = fs::read_to_string(&expanded_path)
-                .map_err(|e| eyre!("Failed to read gather file {:?}: {}", expanded_path, e))?;
-
-            let gather_config = RuneConfig::from_str(&gather_content)
-                .map_err(|e| eyre!("Failed to parse gather file {:?}: {}", expanded_path, e))?;
-
-            // Get the document from the gathered config
-            if let Some(doc) = gather_config.document() {
-                let import_alias = alias.unwrap_or_else(|| {
-                    // Use filename without extension as default alias
-                    expanded_path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("imported")
-                        .to_string()
-                });
-
-                config.inject_import(import_alias, doc.clone());
-            }
-        }
-    }
-
-    Ok(config)
-}
-
-/// Load config with gather support and theme priority system
-pub fn load_config(path: &str) -> Result<DstlConfig> {
-    let path_buf = PathBuf::from(path);
-    let config = load_config_with_gather(&path_buf)?;
-
+/// Extract DstlConfig from a loaded RuneConfig
+fn extract_dstl_config(config: RuneConfig) -> Result<DstlConfig> {
     // --- Fetch values with validation ---
     let dmenu = get_config_or(&config, "dstl.dmenu", false);
     let terminal = get_config_or(&config, "dstl.terminal", "foot".to_string());
@@ -325,26 +249,22 @@ fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, Str
 
 /// Top-level config loader that exits gracefully on failure.
 pub fn load_launcher_config() -> DstlConfig {
-    let path = find_config().expect("No launcher.rune config found");
-    match load_config(&path.to_string_lossy()) {
-        Ok(cfg) => cfg,
-        Err(err) => {
-            eprintln!("❌ Configuration error:\n{}", err);
+    let user_config = dirs::config_dir()
+        .map(|c| c.join("dstl/dstl.rune"))
+        .unwrap_or_else(|| PathBuf::from("~/.config/dstl/dstl.rune"));
+    
+    let system_config = PathBuf::from("/usr/share/doc/dstl/dstl.rune");
+    
+    // Load config with automatic import resolution and fallback support
+    let config = RuneConfig::from_file_with_fallback(&user_config, &system_config)
+        .unwrap_or_else(|e| {
+            eprintln!("❌ Configuration error:\n{}", e);
             process::exit(1);
-        }
-    }
-}
+        });
 
-fn find_config() -> Option<PathBuf> {
-    if let Some(home) = dirs::config_dir() {
-        let user_config = home.join("dstl").join("dstl.rune");
-        if user_config.exists() {
-            return Some(user_config);
-        }
-    }
-    let default_config = PathBuf::from("/usr/share/doc/dstl/dstl.rune");
-    if default_config.exists() {
-        return Some(default_config);
-    }
-    None
+    // Extract DstlConfig from the loaded RuneConfig
+    extract_dstl_config(config).unwrap_or_else(|e| {
+        eprintln!("❌ Configuration parsing error:\n{}", e);
+        process::exit(1);
+    })
 }

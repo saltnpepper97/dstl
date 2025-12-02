@@ -16,4 +16,4 @@ regex = "1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 ratatui = "0.29.0"
-rune-cfg = "0.1.33"
+rune-cfg = "0.2.0"
