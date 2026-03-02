@@ -199,7 +199,7 @@ dstl automatically scans for `.desktop` files in standard XDG directories to pop
 
 ## License
 
-MIT
+GPLv3
 
 ## Contributing
 
